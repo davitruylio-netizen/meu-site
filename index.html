@@ -3,26 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Urban Flow — Parkour Animation Engine</title>
+    <title>Five Nights at Freddy's — Ultra Detail Edition</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
         body, html {
             width: 100%; height: 100%;
             overflow: hidden;
-            background: #0b0d14;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #000;
+            font-family: 'Courier New', Courier, monospace;
             color: #fff;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            display: flex; justify-content: center; align-items: center;
         }
 
-        #game-container {
+        #game-wrapper {
             position: relative;
-            width: 960px; height: 540px;
-            background: #121520;
-            border: 2px solid #00f0ff;
-            border-radius: 12px;
-            box-shadow: 0 0 30px rgba(0, 240, 255, 0.25);
+            width: 1000px; height: 562px;
+            background: #000;
+            border: 3px solid #1a1a1a;
             overflow: hidden;
+            box-shadow: 0 0 40px rgba(255, 0, 0, 0.25);
         }
 
         canvas {
@@ -31,47 +30,151 @@
             image-rendering: pixelated;
         }
 
+        /* --- HUD DE ENERGIA E HORA --- */
         .hud-overlay {
-            position: absolute; top: 15px; left: 20px;
-            display: flex; gap: 20px; font-weight: bold;
-            font-size: 14px; text-shadow: 0 2px 4px rgba(0,0,0,0.8);
-            z-index: 10;
+            position: absolute; bottom: 20px; left: 20px;
+            z-index: 10; pointer-events: none;
+            display: flex; flex-direction: column; gap: 6px;
+            font-weight: bold; text-shadow: 2px 2px #000;
         }
 
-        .hud-item {
-            background: rgba(18, 21, 32, 0.8);
-            padding: 6px 14px; border-radius: 6px;
-            border: 1px solid rgba(0, 240, 255, 0.3);
+        .night-time {
+            position: absolute; top: 20px; right: 25px;
+            font-size: 24px; text-align: right;
+            z-index: 10; pointer-events: none;
+            text-shadow: 2px 2px #000;
         }
 
-        .controls-hint {
-            position: absolute; bottom: 15px; left: 50%;
+        /* --- BOTÃO DO MONITOR DE CÂMERAS --- */
+        #camera-flip-btn {
+            position: absolute; bottom: 8px; left: 50%;
             transform: translateX(-50%);
-            display: flex; gap: 15px; font-size: 12px; color: #a0a5b5;
-            background: rgba(10, 12, 18, 0.85); padding: 8px 16px; border-radius: 20px;
-            border: 1px solid rgba(255,255,255,0.1);
+            width: 450px; height: 38px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 6px; cursor: pointer;
+            z-index: 20; display: flex;
+            justify-content: center; align-items: center;
+            font-size: 15px; letter-spacing: 3px; font-weight: bold;
+            transition: all 0.2s;
+        }
+        #camera-flip-btn:hover { background: rgba(255, 255, 255, 0.35); border-color: #fff; }
+
+        /* --- PAINEL DAS CÂMERAS (MAPA) --- */
+        #cam-map-container {
+            position: absolute; bottom: 55px; right: 20px;
+            width: 290px; height: 230px;
+            background: rgba(5, 8, 15, 0.85);
+            border: 2px solid #444;
+            z-index: 30; display: none;
+            padding: 10px; border-radius: 4px;
         }
 
-        kbd {
-            background: #00f0ff; color: #0b0d14;
-            padding: 2px 6px; border-radius: 4px; font-weight: bold;
+        .cam-btn {
+            position: absolute; background: #1a1a24;
+            border: 1px solid #666; color: #fff;
+            padding: 4px 8px; font-size: 11px;
+            cursor: pointer; font-family: inherit;
+            border-radius: 3px; font-weight: bold;
+        }
+        .cam-btn.active { background: #1b5e20; border-color: #00e676; box-shadow: 0 0 8px #00e676; }
+
+        /* Posicionamento dos botões no Mapa */
+        #btn-cam1a { top: 15px; left: 115px; }
+        #btn-cam1b { top: 45px; left: 105px; }
+        #btn-cam1c { top: 85px; left: 80px; }
+        #btn-cam5  { top: 55px; left: 20px; }
+        #btn-cam3  { top: 145px; left: 20px; }
+        #btn-cam2a { top: 140px; left: 100px; }
+        #btn-cam2b { top: 175px; left: 100px; }
+        #btn-cam4a { top: 140px; left: 170px; }
+        #btn-cam4b { top: 175px; left: 170px; }
+        #btn-cam7  { top: 55px; left: 220px; }
+        #btn-cam6  { top: 115px; left: 220px; }
+
+        /* MENU INICIAL DO FNAF */
+        #menu-screen {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #000; z-index: 100;
+            display: flex; flex-direction: column;
+            justify-content: center; padding-left: 80px;
+        }
+
+        .title-fnaf {
+            font-size: 3rem; font-weight: bold;
+            line-height: 1.1; margin-bottom: 30px;
+            color: #fff; text-shadow: 0 0 12px rgba(255, 0, 0, 0.7);
+        }
+
+        .menu-opt {
+            font-size: 1.5rem; color: #888;
+            margin: 12px 0; cursor: pointer;
+            transition: all 0.2s; width: max-content;
+        }
+        .menu-opt:hover { color: #fff; text-shadow: 0 0 10px #fff; transform: translateX(5px); }
+
+        /* JANELA DE GAME OVER E 6 AM */
+        #game-over-screen, #win-screen {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #000; z-index: 90;
+            display: none; flex-direction: column;
+            justify-content: center; align-items: center;
         }
     </style>
 </head>
 <body>
 
-    <div id="game-container">
+    <div id="game-wrapper">
+        <canvas id="gameCanvas" width="1200" height="562"></canvas>
+
+        <!-- HUD DE INFORMAÇÕES -->
         <div class="hud-overlay">
-            <div class="hud-item">ESTADO: <span id="anim-state" style="color: #00f0ff;">CORRENDO</span></div>
-            <div class="hud-item">VELOCIDADE: <span id="speed-val" style="color: #ff0055;">0 km/h</span></div>
+            <div style="font-size: 20px;">Power left: <span id="power-val">100</span>%</div>
+            <div style="font-size: 15px; color: #aaa;">Usage: <span id="usage-bars" style="color:#00e676;">█</span></div>
         </div>
 
-        <canvas id="gameCanvas" width="960" height="540"></canvas>
+        <div class="night-time">
+            <div style="font-size: 28px; font-weight: bold;"><span id="time-val">12</span> AM</div>
+            <div style="font-size: 14px; color: #888;">Night 1</div>
+        </div>
 
-        <div class="controls-hint">
-            <span><kbd>D</kbd> / <kbd>→</kbd> Correr</span>
-            <span><kbd>W</kbd> / <kbd>Espaço</kbd> Pular / Escalar</span>
-            <span><kbd>S</kbd> / <kbd>↓</kbd> Deslizar / Rolar</span>
+        <!-- ABA DO MONITOR -->
+        <div id="camera-flip-btn" onclick="toggleMonitor()">[ MONITOR ]</div>
+
+        <!-- MAPA DAS CÂMERAS -->
+        <div id="cam-map-container">
+            <button class="cam-btn active" id="btn-cam1a" onclick="selectCam('1A')">CAM 1A</button>
+            <button class="cam-btn" id="btn-cam1b" onclick="selectCam('1B')">CAM 1B</button>
+            <button class="cam-btn" id="btn-cam1c" onclick="selectCam('1C')">CAM 1C</button>
+            <button class="cam-btn" id="btn-cam5"  onclick="selectCam('5')">CAM 5</button>
+            <button class="cam-btn" id="btn-cam3"  onclick="selectCam('3')">CAM 3</button>
+            <button class="cam-btn" id="btn-cam2a" onclick="selectCam('2A')">CAM 2A</button>
+            <button class="cam-btn" id="btn-cam2b" onclick="selectCam('2B')">CAM 2B</button>
+            <button class="cam-btn" id="btn-cam4a" onclick="selectCam('4A')">CAM 4A</button>
+            <button class="cam-btn" id="btn-cam4b" onclick="selectCam('4B')">CAM 4B</button>
+            <button class="cam-btn" id="btn-cam7"  onclick="selectCam('7')">CAM 7</button>
+            <button class="cam-btn" id="btn-cam6"  onclick="selectCam('6')">CAM 6</button>
+        </div>
+
+        <!-- MENU INICIAL -->
+        <div id="menu-screen">
+            <div class="title-fnaf">Five<br>Nights<br>at<br>Freddy's</div>
+            <div class="menu-opt" onclick="startNight()">New Game</div>
+            <div class="menu-opt" onclick="startNight()">Continue</div>
+        </div>
+
+        <!-- TELA DE GAME OVER -->
+        <div id="game-over-screen">
+            <h1 style="color: #800; font-size: 4rem; margin-bottom: 20px; text-shadow: 0 0 15px #f00;">GAME OVER</h1>
+            <button onclick="location.reload()" style="background: none; border: 2px solid #555; color: #fff; padding: 12px 25px; cursor: pointer; font-size: 16px; font-family: inherit;">Try Again</button>
+        </div>
+
+        <!-- TELA DE 6 AM -->
+        <div id="win-screen">
+            <h1 style="color: #fff; font-size: 4rem; letter-spacing: 5px;">5 AM</h1>
+            <h1 id="win-6am" style="color: #00e676; font-size: 6rem; letter-spacing: 6px; display: none; text-shadow: 0 0 20px #00e676;">6 AM</h1>
         </div>
     </div>
 
