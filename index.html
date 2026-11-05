@@ -3,24 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ECLIPSE — O Último Mundo</title>
+    <title>Urban Flow — Parkour Animation Engine</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
         body, html {
             width: 100%; height: 100%;
             overflow: hidden;
-            background: #040207;
-            font-family: 'Georgia', serif;
-            color: #d1c4e9;
-            display: flex; justify-content: center; align-items: center;
+            background: #0b0d14;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
 
-        #game-wrapper {
+        #game-container {
             position: relative;
             width: 960px; height: 540px;
-            background: #000;
-            border: 2px solid #2a1b4e;
-            box-shadow: 0 0 35px rgba(106, 27, 154, 0.4);
+            background: #121520;
+            border: 2px solid #00f0ff;
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(0, 240, 255, 0.25);
             overflow: hidden;
         }
 
@@ -28,108 +29,49 @@
             display: block;
             width: 100%; height: 100%;
             image-rendering: pixelated;
-            image-rendering: crisp-edges;
         }
 
-        /* --- INTERFACE DE USUÁRIO (HUD) --- */
-        #hud-layer {
-            position: absolute; top: 0; left: 0;
-            width: 100%; height: 100%;
-            pointer-events: none;
-            display: none; flex-direction: column;
-            justify-content: space-between;
-            padding: 20px;
+        .hud-overlay {
+            position: absolute; top: 15px; left: 20px;
+            display: flex; gap: 20px; font-weight: bold;
+            font-size: 14px; text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            z-index: 10;
         }
 
-        .stats-container { display: flex; flex-direction: column; gap: 8px; }
-        .bar-wrapper { width: 220px; height: 16px; background: rgba(15, 10, 25, 0.85); border: 1px solid #4a2c82; border-radius: 3px; overflow: hidden; position: relative; }
-        .bar-fill { height: 100%; transition: width 0.15s ease-out; }
-        #hp-bar { background: linear-gradient(90deg, #b71c1c, #ff1744); width: 100%; }
-        #stamina-bar { background: linear-gradient(90deg, #1b5e20, #00e676); width: 100%; }
-        .bar-text { position: absolute; width: 100%; text-align: center; top: 0; font-size: 10px; font-weight: bold; color: #fff; text-shadow: 1px 1px #000; line-height: 16px; }
-
-        /* --- MENU PRINCIPAL CINEMATOGRÁFICO --- */
-        #main-menu {
-            position: absolute; top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: rgba(4, 2, 7, 0.9);
-            display: flex; flex-direction: column;
-            justify-content: center; align-items: center;
-            z-index: 100;
+        .hud-item {
+            background: rgba(18, 21, 32, 0.8);
+            padding: 6px 14px; border-radius: 6px;
+            border: 1px solid rgba(0, 240, 255, 0.3);
         }
 
-        .title-logo {
-            font-size: 3rem; font-weight: bold;
-            letter-spacing: 6px; color: #ede7f6;
-            text-shadow: 0 0 15px rgba(156, 39, 176, 0.8), 0 0 30px rgba(239, 83, 80, 0.5);
-            margin-bottom: 5px;
-        }
-        .subtitle { font-size: 0.9rem; color: #b388ff; letter-spacing: 3px; margin-bottom: 40px; text-transform: uppercase; }
-
-        .menu-options { display: flex; flex-direction: column; gap: 14px; width: 220px; }
-        .menu-btn {
-            background: rgba(30, 15, 55, 0.6);
-            border: 1px solid #5e35b1; color: #d1c4e9;
-            padding: 12px; font-size: 13px; font-family: inherit;
-            letter-spacing: 2px; cursor: pointer;
-            transition: all 0.25s ease; text-align: center;
-        }
-        .menu-btn:hover {
-            background: #5e35b1; color: #fff;
-            box-shadow: 0 0 15px rgba(156, 39, 176, 0.6);
-            transform: translateY(-2px);
-        }
-
-        /* --- DIÁLOGOS DE HISTÓRIA --- */
-        #dialogue-box {
-            position: absolute; bottom: 20px; left: 50%;
+        .controls-hint {
+            position: absolute; bottom: 15px; left: 50%;
             transform: translateX(-50%);
-            width: 85%; background: rgba(10, 5, 20, 0.95);
-            border: 2px solid #6a1b9a; border-radius: 6px;
-            padding: 16px 20px; display: none; gap: 15px;
-            z-index: 50; box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            display: flex; gap: 15px; font-size: 12px; color: #a0a5b5;
+            background: rgba(10, 12, 18, 0.85); padding: 8px 16px; border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
         }
-        .speaker-name { font-weight: bold; color: #e040fb; font-size: 14px; margin-bottom: 6px; }
-        .dialogue-text { font-size: 13px; color: #ede7f6; line-height: 1.5; }
+
+        kbd {
+            background: #00f0ff; color: #0b0d14;
+            padding: 2px 6px; border-radius: 4px; font-weight: bold;
+        }
     </style>
 </head>
 <body>
 
-    <div id="game-wrapper">
+    <div id="game-container">
+        <div class="hud-overlay">
+            <div class="hud-item">ESTADO: <span id="anim-state" style="color: #00f0ff;">CORRENDO</span></div>
+            <div class="hud-item">VELOCIDADE: <span id="speed-val" style="color: #ff0055;">0 km/h</span></div>
+        </div>
+
         <canvas id="gameCanvas" width="960" height="540"></canvas>
-        
-        <!-- HUD -->
-        <div id="hud-layer">
-            <div class="stats-container">
-                <div class="bar-wrapper">
-                    <div id="hp-bar" class="bar-fill"></div>
-                    <div class="bar-text">VIDA: <span id="hp-val">100/100</span></div>
-                </div>
-                <div class="bar-wrapper">
-                    <div id="stamina-bar" class="bar-fill"></div>
-                    <div class="bar-text">ENERGIA: <span id="stamina-val">100/100</span></div>
-                </div>
-            </div>
-        </div>
 
-        <!-- DIÁLOGOS -->
-        <div id="dialogue-box">
-            <div>
-                <div class="speaker-name" id="speaker-name">Voz Antiga</div>
-                <div class="dialogue-text" id="dialogue-text">...</div>
-            </div>
-        </div>
-
-        <!-- MENU PRINCIPAL -->
-        <div id="main-menu">
-            <div class="title-logo">ECLIPSE</div>
-            <div class="subtitle">O Último Mundo</div>
-            <div class="menu-options">
-                <button class="menu-btn" onclick="startGame()">NOVO JOGO</button>
-                <button class="menu-btn" onclick="alert('Carregando ponto de restauração...')">CONTINUAR</button>
-                <button class="menu-btn" onclick="alert('Opções de Gráficos e Áudio')">CONFIGURAÇÕES</button>
-                <button class="menu-btn" onclick="showCredits()">CRÉDITOS</button>
-            </div>
+        <div class="controls-hint">
+            <span><kbd>D</kbd> / <kbd>→</kbd> Correr</span>
+            <span><kbd>W</kbd> / <kbd>Espaço</kbd> Pular / Escalar</span>
+            <span><kbd>S</kbd> / <kbd>↓</kbd> Deslizar / Rolar</span>
         </div>
     </div>
 
