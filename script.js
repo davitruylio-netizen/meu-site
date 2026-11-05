@@ -1,303 +1,380 @@
 // =============================================================================
-// URBAN FLOW — MOTOR DE PARKOUR & ANIMAÇÃO PROCEDURAL
+// FIVE NIGHTS AT FREDDY'S — ULTRA DETAIL GAME ENGINE
 // =============================================================================
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
 
-// --- TECLAS E INPUTS ---
-const keys = {};
-window.addEventListener('keydown', e => keys[e.code] = true);
-window.addEventListener('keyup', e => keys[e.code] = false);
+// --- SINTETIZADOR DE ÁUDIO WEB (SEM ARQUIVOS EXTERNOS) ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-// --- CÂMERA DE ACOMPANHAMENTO FLUIDO ---
-const camera = {
-    x: 0, y: 0,
-    width: canvas.width,
-    height: canvas.height,
-    follow(target) {
-        let targetX = target.x - 200;
-        let targetY = target.y - 300;
-        this.x += (targetX - this.x) * 0.1;
-        this.y += (targetY - this.y) * 0.1;
-    }
-};
+function playSound(type) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
 
-// --- PROTAGONISTA & MÁQUINA DE ESTADOS DE ANIMAÇÃO ---
-class ParkourRunner {
-    constructor(x, y) {
-        this.x = x; this.y = y;
-        this.width = 24; this.height = 48;
-        this.vx = 0; this.vy = 0;
-        this.speed = 6;
-        this.jumpForce = -12;
-        this.grounded = false;
-        this.isClimbing = false;
-
-        // Máquina de Estados
-        this.state = 'RUN'; // 'IDLE', 'RUN', 'JUMP', 'FALL', 'SLIDE', 'ROLL', 'CLIMB'
-        this.animTimer = 0;
-        this.rollTimer = 0;
-        this.slideTimer = 0;
-
-        // Esqueleto Procedural para Animações Ultra-Fluidas
-        this.pose = {
-            head: { x: 0, y: -20 },
-            body: { x: 0, y: 0 },
-            leftArm: { x: -8, y: -5 },
-            rightArm: { x: 8, y: -5 },
-            leftLeg: { x: -6, y: 20 },
-            rightLeg: { x: 6, y: 20 }
-        };
-    }
-
-    update(platforms) {
-        this.animTimer += 0.2;
-
-        // Lógica de Movimento e Entrada de Teclas
-        const isRight = keys['KeyD'] || keys['ArrowRight'];
-        const isLeft = keys['KeyA'] || keys['ArrowLeft'];
-        const isJump = keys['KeyW'] || keys['Space'] || keys['ArrowUp'];
-        const isCrouch = keys['KeyS'] || keys['ArrowDown'];
-
-        if (this.isClimbing) {
-            this.vy = -3;
-            this.vx = 0;
-            this.state = 'CLIMB';
-            if (this.animTimer > 3) {
-                this.isClimbing = false;
-                this.y -= 25;
-                this.vy = 0;
-            }
-            return;
-        }
-
-        // Movimentação Horizontal
-        if (isRight) {
-            this.vx = this.speed;
-        } else if (isLeft) {
-            this.vx = -this.speed * 0.6;
-        } else {
-            this.vx *= 0.85;
-        }
-
-        // Rolamento / Deslizamento
-        if (isCrouch && this.grounded && this.slideTimer === 0) {
-            this.slideTimer = 25;
-            this.state = 'SLIDE';
-        }
-
-        if (this.slideTimer > 0) {
-            this.slideTimer--;
-            this.vx = 8;
-        }
-
-        // Pulo
-        if (isJump && this.grounded && this.slideTimer === 0) {
-            this.vy = this.jumpForce;
-            this.grounded = false;
-            this.state = 'JUMP';
-        }
-
-        // Aplicar Gravidade
-        this.vy += 0.55;
-
-        // Atualização de Posição & Colisão X
-        this.x += this.vx;
-        platforms.forEach(p => {
-            if (this.checkCollision(p)) {
-                // Detecção de Escalada em Bordas de Prédios (Ledge Grab)
-                if (this.vy > 0 && this.x + this.width >= p.x && this.x < p.x + 10 && this.y + 20 > p.y && this.y < p.y + 20) {
-                    this.isClimbing = true;
-                    this.animTimer = 0;
-                    this.x = p.x - this.width;
-                    this.y = p.y;
-                } else {
-                    if (this.vx > 0) this.x = p.x - this.width;
-                    if (this.vx < 0) this.x = p.x + p.width;
-                }
-            }
-        });
-
-        // Atualização de Posição & Colisão Y
-        this.y += this.vy;
-        let wasInAir = !this.grounded;
-        this.grounded = false;
-
-        platforms.forEach(p => {
-            if (this.checkCollision(p)) {
-                if (this.vy > 0) {
-                    this.y = p.y - this.height;
-                    this.vy = 0;
-                    this.grounded = true;
-
-                    // Aciona Animação de Rolamento ao Cair de Alturas
-                    if (wasInAir && this.state === 'FALL') {
-                        this.rollTimer = 20;
-                    }
-                } else if (this.vy < 0) {
-                    this.y = p.y + p.height;
-                    this.vy = 0;
-                }
-            }
-        });
-
-        // Determinar Estado da Animação
-        if (!this.isClimbing) {
-            if (this.rollTimer > 0) {
-                this.rollTimer--;
-                this.state = 'ROLL';
-            } else if (this.slideTimer > 0) {
-                this.state = 'SLIDE';
-            } else if (!this.grounded) {
-                this.state = this.vy < 0 ? 'JUMP' : 'FALL';
-            } else if (Math.abs(this.vx) > 0.5) {
-                this.state = 'RUN';
-            } else {
-                this.state = 'IDLE';
-            }
-        }
-
-        // Atualiza a Interface HUD
-        document.getElementById('anim-state').textContent = this.state;
-        document.getElementById('speed-val').textContent = `${Math.round(Math.abs(this.vx) * 3.6)} km/h`;
-    }
-
-    checkCollision(rect) {
-        return this.x < rect.x + rect.width &&
-               this.x + this.width > rect.x &&
-               this.y < rect.y + rect.height &&
-               this.y + this.height > rect.y;
-    }
-
-    // --- RENDERIZAÇÃO DAS ANIMAÇÕES PROCEDURAIS (ESQUELETO ARTICULADO) ---
-    draw() {
-        const rx = this.x - camera.x + this.width / 2;
-        const ry = this.y - camera.y + this.height / 2;
-        const t = this.animTimer;
-
-        ctx.save();
-        ctx.translate(rx, ry);
-
-        // Sombra Dinâmica
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.beginPath();
-        ctx.ellipse(0, 22, 16, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = '#00f0ff';
-        ctx.lineWidth = 4;
-        ctx.lineCap = 'round';
-
-        let bodyTilt = 0;
-        let armL = { x: -10, y: 10 }, armR = { x: 10, y: 10 };
-        let legL = { x: -10, y: 22 }, legR = { x: 10, y: 22 };
-
-        // Cálculo dos ângulos dos membros conforme a Animação Atual
-        if (this.state === 'RUN') {
-            bodyTilt = 0.15;
-            armL = { x: Math.sin(t) * 16, y: Math.cos(t) * 8 + 5 };
-            armR = { x: -Math.sin(t) * 16, y: -Math.cos(t) * 8 + 5 };
-            legL = { x: -Math.sin(t) * 14, y: 20 + Math.max(0, Math.cos(t) * 6) };
-            legR = { x: Math.sin(t) * 14, y: 20 + Math.max(0, -Math.cos(t) * 6) };
-        } else if (this.state === 'JUMP') {
-            bodyTilt = -0.1;
-            armL = { x: -14, y: -16 }; armR = { x: 14, y: -16 };
-            legL = { x: -8, y: 14 }; legR = { x: 8, y: 22 };
-        } else if (this.state === 'FALL') {
-            bodyTilt = 0.1;
-            armL = { x: -18, y: -8 }; armR = { x: 18, y: -8 };
-            legL = { x: -12, y: 18 }; legR = { x: 4, y: 22 };
-        } else if (this.state === 'SLIDE') {
-            bodyTilt = -0.8;
-            armL = { x: -16, y: 10 }; armR = { x: 12, y: 10 };
-            legL = { x: 18, y: 8 }; legR = { x: 22, y: 12 };
-        } else if (this.state === 'ROLL') {
-            ctx.rotate(t * 3);
-            armL = { x: -8, y: 4 }; armR = { x: 8, y: 4 };
-            legL = { x: -6, y: 10 }; legR = { x: 6, y: 10 };
-        } else if (this.state === 'CLIMB') {
-            armL = { x: 6, y: -20 }; armR = { x: 10, y: -18 };
-            legL = { x: -4, y: 15 }; legR = { x: 2, y: 22 };
-        }
-
-        ctx.rotate(bodyTilt);
-
-        // Tronco
-        ctx.beginPath();
-        ctx.moveTo(0, -12); ctx.lineTo(0, 8);
-        ctx.stroke();
-
-        // Cabeça com Capacete/Viseira Neon
-        ctx.fillStyle = '#ff0055';
-        ctx.beginPath();
-        ctx.arc(0, -18, 7, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Braços
-        ctx.beginPath();
-        ctx.moveTo(0, -8); ctx.lineTo(armL.x, armL.y);
-        ctx.moveTo(0, -8); ctx.lineTo(armR.x, armR.y);
-        ctx.stroke();
-
-        // Pernas
-        ctx.beginPath();
-        ctx.moveTo(0, 8); ctx.lineTo(legL.x, legL.y);
-        ctx.moveTo(0, 8); ctx.lineTo(legR.x, legR.y);
-        ctx.stroke();
-
-        ctx.restore();
+    if (type === 'door') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.25);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.25);
+    } else if (type === 'light') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.08);
+    } else if (type === 'jumpscare') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+        osc.frequency.linearRampToValueAtTime(150, audioCtx.currentTime + 1.2);
+        gain.gain.setValueAtTime(0.8, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.2);
+        osc.start(); osc.stop(audioCtx.currentTime + 1.2);
     }
 }
 
-// --- GERAÇÃO DO MAPA DE PRÉDIOS E TELHADOS (PARKOUR MAP) ---
-const platforms = [
-    { x: 0, y: 450, width: 600, height: 100 },
-    { x: 700, y: 380, width: 450, height: 170 },
-    { x: 1250, y: 300, width: 400, height: 250 },
-    { x: 1750, y: 240, width: 500, height: 300 },
-    { x: 2350, y: 380, width: 600, height: 170 }
-];
+// --- ESTADO DO JOGO ---
+let gameRunning = false;
+let monitorOpen = false;
+let currentCam = '1A';
 
-const runner = new ParkourRunner(100, 350);
+let officeX = 120;
+let mouseX = 500;
 
-// --- LOOP DE RENDERIZAÇÃO DA CIDADE ---
-function gameLoop() {
-    // Fundo Cyberpunk/Urbano
-    ctx.fillStyle = '#0b0d14';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+let leftDoor = false;
+let rightDoor = false;
+let leftLight = false;
+let rightLight = false;
 
-    // Atualização
-    runner.update(platforms);
-    camera.follow(runner);
+let fanAngle = 0;
+let power = 100;
+let hour = 0;
+let nightTimer = 0;
 
-    // Desenhar Telhados e Prédios
-    platforms.forEach(p => {
-        const rx = p.x - camera.x;
-        const ry = p.y - camera.y;
+// --- IA E POSIÇÕES DOS ANIMATRÔNICOS ---
+const animatronics = {
+    bonnie: { location: '1A', aiLevel: 4, timer: 0 },
+    chica:  { location: '1A', aiLevel: 3, timer: 0 },
+    foxy:   { location: '1C', stage: 0, aiLevel: 3, timer: 0 }, // Stages: 0 (escondido), 1 (espiando), 2 (fora da cortina), 3 (correndo)
+    freddy: { location: '1A', aiLevel: 2, timer: 0 }
+};
 
-        // Corpo do Prédio
-        ctx.fillStyle = '#161a29';
-        ctx.fillRect(rx, ry, p.width, p.height);
+// Movimento do Mouse
+const wrapper = document.getElementById('game-wrapper');
+wrapper.addEventListener('mousemove', e => {
+    const rect = wrapper.getBoundingClientRect();
+    mouseX = e.clientX - rect.left;
+});
 
-        // Topo com Neon (Borda de Impacto para Parkour)
-        ctx.fillStyle = '#00f0ff';
-        ctx.fillRect(rx, ry, p.width, 4);
+// Cliques no Escritório
+canvas.addEventListener('click', e => {
+    if (monitorOpen || !gameRunning) return;
 
-        // Linhas de Janelas/Grade de Prédio
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-        for (let jx = rx + 20; jx < rx + p.width - 20; jx += 40) {
-            for (let jy = ry + 20; jy < ry + p.height - 20; jy += 40) {
-                ctx.fillRect(jx, jy, 20, 20);
+    const rect = canvas.getBoundingClientRect();
+    const clickX = e.clientX - rect.left + (officeX * 0.8);
+    const clickY = e.clientY - rect.top;
+
+    // Botões Porta e Luz Esquerda
+    if (clickX > 80 && clickX < 140) {
+        if (clickY > 180 && clickY < 230) { leftDoor = !leftDoor; playSound('door'); }
+        if (clickY > 240 && clickY < 290) { leftLight = !leftLight; playSound('light'); }
+    }
+
+    // Botões Porta e Luz Direita
+    if (clickX > 1050 && clickX < 1110) {
+        if (clickY > 180 && clickY < 230) { rightDoor = !rightDoor; playSound('door'); }
+        if (clickY > 240 && clickY < 290) { rightLight = !rightLight; playSound('light'); }
+    }
+});
+
+function toggleMonitor() {
+    if (!gameRunning) return;
+    monitorOpen = !monitorOpen;
+    document.getElementById('cam-map-container').style.display = monitorOpen ? 'block' : 'none';
+    playSound('light');
+}
+
+function selectCam(cam) {
+    currentCam = cam;
+    document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`btn-cam${cam.toLowerCase()}`).classList.add('active');
+    playSound('light');
+}
+
+// --- LÓGICA DE MOVIMENTAÇÃO DOS ANIMATRÔNICOS ---
+function updateAI() {
+    // BONNIE
+    animatronics.bonnie.timer++;
+    if (animatronics.bonnie.timer > 220) {
+        animatronics.bonnie.timer = 0;
+        if (Math.random() * 20 < animatronics.bonnie.aiLevel) {
+            const bRoute = ['1A', '5', '3', '2A', '2B', 'OFFICE'];
+            let idx = bRoute.indexOf(animatronics.bonnie.location);
+            if (idx < bRoute.length - 1) animatronics.bonnie.location = bRoute[idx + 1];
+
+            if (animatronics.bonnie.location === 'OFFICE') {
+                if (!leftDoor) triggerJumpscare('BONNIE');
+                else animatronics.bonnie.location = '1B';
             }
         }
-    });
+    }
 
-    // Desenhar Protagonista
-    runner.draw();
+    // CHICA
+    animatronics.chica.timer++;
+    if (animatronics.chica.timer > 260) {
+        animatronics.chica.timer = 0;
+        if (Math.random() * 20 < animatronics.chica.aiLevel) {
+            const cRoute = ['1A', '1B', '7', '4A', '4B', 'OFFICE'];
+            let idx = cRoute.indexOf(animatronics.chica.location);
+            if (idx < cRoute.length - 1) animatronics.chica.location = cRoute[idx + 1];
 
+            if (animatronics.chica.location === 'OFFICE') {
+                if (!rightDoor) triggerJumpscare('CHICA');
+                else animatronics.chica.location = '1B';
+            }
+        }
+    }
+
+    // FOXY (PIRATE COVE)
+    animatronics.foxy.timer++;
+    if (animatronics.foxy.timer > 320 && !monitorOpen) {
+        animatronics.foxy.timer = 0;
+        if (Math.random() * 20 < animatronics.foxy.aiLevel) {
+            if (animatronics.foxy.stage < 3) {
+                animatronics.foxy.stage++;
+            } else {
+                // Foxy corre até o escritório!
+                if (!leftDoor) {
+                    triggerJumpscare('FOXY');
+                } else {
+                    animatronics.foxy.stage = 0;
+                    power -= 6; // Perde energia ao bater na porta
+                }
+            }
+        }
+    }
+}
+
+function triggerJumpscare(who) {
+    gameRunning = false;
+    document.getElementById('cam-map-container').style.display = 'none';
+    playSound('jumpscare');
+
+    let frame = 0;
+    const interval = setInterval(() => {
+        ctx.fillStyle = frame % 2 === 0 ? '#000' : '#400';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Renderização dos Animatrônicos em Jumpscare
+        ctx.save();
+        ctx.translate(600, 280);
+        ctx.scale(1 + frame * 0.05, 1 + frame * 0.05);
+
+        if (who === 'BONNIE') ctx.fillStyle = '#3f51b5';
+        else if (who === 'CHICA') ctx.fillStyle = '#fbc02d';
+        else if (who === 'FOXY') ctx.fillStyle = '#d84315';
+        else ctx.fillStyle = '#6d4c41'; // FREDDY
+
+        ctx.beginPath();
+        ctx.arc(0, 0, 160, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Olhos e Boca Assustadores
+        ctx.fillStyle = '#000';
+        ctx.fillRect(-60, -40, 40, 40); ctx.fillRect(20, -40, 40, 40);
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(-45, -25, 12, 12); ctx.fillRect(35, -25, 12, 12);
+
+        ctx.fillStyle = '#000';
+        ctx.fillRect(-50, 40, 100, 50); // Boca
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(-40, 45, 15, 15); ctx.fillRect(-15, 45, 15, 15); ctx.fillRect(10, 45, 15, 15); // Dentes
+
+        ctx.restore();
+
+        frame++;
+        if (frame > 20) {
+            clearInterval(interval);
+            document.getElementById('game-over-screen').style.display = 'flex';
+        }
+    }, 50);
+}
+
+// --- RENDERIZAÇÃO DE GRÁFICOS DO ESCRITÓRIO E CÂMERAS ---
+function render() {
+    if (!monitorOpen) {
+        if (mouseX < 250 && officeX > 0) officeX -= 7;
+        if (mouseX > 750 && officeX < 240) officeX += 7;
+    }
+
+    ctx.save();
+    ctx.translate(-officeX, 0);
+
+    if (!monitorOpen) {
+        // --- ESCRITÓRIO 3D ---
+        ctx.fillStyle = '#0f1115';
+        ctx.fillRect(0, 0, 1240, 562);
+
+        // Luzes e Animatrônicos nas Portas
+        if (leftLight) {
+            ctx.fillStyle = animatronics.bonnie.location === '2B' ? '#282b5c' : '#eef';
+            ctx.fillRect(60, 80, 120, 360);
+            if (animatronics.bonnie.location === '2B') {
+                ctx.fillStyle = '#3f51b5'; ctx.fillRect(90, 180, 60, 160); // Bonnie na Porta
+                ctx.fillStyle = '#ff0000'; ctx.fillRect(105, 200, 8, 8); ctx.fillRect(125, 200, 8, 8);
+            }
+        } else {
+            ctx.fillStyle = '#030305'; ctx.fillRect(60, 80, 120, 360);
+        }
+
+        if (rightLight) {
+            ctx.fillStyle = animatronics.chica.location === '4B' ? '#5c5428' : '#eef';
+            ctx.fillRect(1060, 80, 120, 360);
+            if (animatronics.chica.location === '4B') {
+                ctx.fillStyle = '#fbc02d'; ctx.fillRect(1090, 180, 60, 160); // Chica na Porta
+                ctx.fillStyle = '#ff0000'; ctx.fillRect(1105, 200, 8, 8); ctx.fillRect(1125, 200, 8, 8);
+            }
+        } else {
+            ctx.fillStyle = '#030305'; ctx.fillRect(1060, 80, 120, 360);
+        }
+
+        // Portas de Metal
+        ctx.fillStyle = leftDoor ? '#2a2a2a' : '#121212';
+        ctx.fillRect(60, leftDoor ? 80 : -280, 120, 360);
+        ctx.strokeStyle = '#444'; ctx.strokeRect(60, leftDoor ? 80 : -280, 120, 360);
+
+        ctx.fillStyle = rightDoor ? '#2a2a2a' : '#121212';
+        ctx.fillRect(1060, rightDoor ? 80 : -280, 120, 360);
+        ctx.strokeStyle = '#444'; ctx.strokeRect(1060, rightDoor ? 80 : -280, 120, 360);
+
+        // Botões de Porta/Luz
+        ctx.fillStyle = leftDoor ? '#e53935' : '#444'; ctx.fillRect(100, 190, 30, 30);
+        ctx.fillStyle = leftLight ? '#fbc02d' : '#444'; ctx.fillRect(100, 250, 30, 30);
+
+        ctx.fillStyle = rightDoor ? '#e53935' : '#444'; ctx.fillRect(1110, 190, 30, 30);
+        ctx.fillStyle = rightLight ? '#fbc02d' : '#444'; ctx.fillRect(1110, 250, 30, 30);
+
+        // Mesa do Guarda e Ventilador Animação
+        ctx.fillStyle = '#181512'; ctx.fillRect(300, 400, 640, 162);
+        
+        // Ventilador Girando
+        fanAngle += 0.3;
+        ctx.save();
+        ctx.translate(610, 375);
+        ctx.fillStyle = '#333'; ctx.fillRect(-5, -5, 10, 10);
+        ctx.rotate(fanAngle);
+        ctx.fillStyle = '#666';
+        ctx.fillRect(-25, -4, 50, 8); ctx.fillRect(-4, -25, 8, 50);
+        ctx.restore();
+
+    } else {
+        // --- TELA DAS CÂMERAS ---
+        ctx.restore();
+        ctx.save();
+
+        ctx.fillStyle = '#05080c';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Efeito de Ruído/Estática CRT
+        for (let i = 0; i < 500; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.3)';
+            ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 3, 3);
+        }
+
+        ctx.fillStyle = '#00e676';
+        ctx.font = 'bold 20px "Courier New", monospace';
+        ctx.fillText(`● CAM ${currentCam}`, 50, 50);
+
+        // Animatrônicos na Câmera Atual
+        let detected = [];
+        if (animatronics.bonnie.location === currentCam) detected.push("BONNIE");
+        if (animatronics.chica.location === currentCam) detected.push("CHICA");
+        if (animatronics.freddy.location === currentCam) detected.push("FREDDY");
+
+        // Câmera do Foxy (CAM 1C)
+        if (currentCam === '1C') {
+            ctx.fillStyle = '#ff0055';
+            ctx.fillText(`PIRATE COVE - STAGE: ${animatronics.foxy.stage}`, 50, 85);
+            ctx.fillStyle = '#8d6e63';
+            ctx.fillRect(350, 160, 250, 300); // Cortina
+            if (animatronics.foxy.stage > 0) {
+                ctx.fillStyle = '#d84315';
+                ctx.fillRect(420, 220, 50, 80); // Foxy Espiando
+            }
+        }
+
+        if (detected.length > 0) {
+            ctx.fillStyle = '#ff1744';
+            ctx.fillText(`DETECCAO: ${detected.join(', ')}`, 50, 120);
+
+            // Silhueta no Palco
+            ctx.fillStyle = '#111';
+            ctx.fillRect(400, 180, 200, 280);
+            ctx.fillStyle = '#ff1744';
+            ctx.fillRect(460, 220, 16, 16); ctx.fillRect(520, 220, 16, 16);
+        }
+    }
+
+    ctx.restore();
+}
+
+// --- CONSUMO DE ENERGIA E RELÓGIO ---
+function updateGameLogic() {
+    if (!gameRunning) return;
+
+    let usage = 1;
+    if (leftDoor) usage++;
+    if (rightDoor) usage++;
+    if (leftLight) usage++;
+    if (rightLight) usage++;
+    if (monitorOpen) usage++;
+
+    const bars = document.getElementById('usage-bars');
+    bars.textContent = '█'.repeat(usage);
+    bars.style.color = usage > 3 ? '#ff1744' : (usage > 2 ? '#ffb300' : '#00e676');
+
+    power -= usage * 0.009;
+    document.getElementById('power-val').textContent = Math.max(0, Math.floor(power));
+
+    if (power <= 0) {
+        leftDoor = false; rightDoor = false;
+        leftLight = false; rightLight = false;
+        monitorOpen = false;
+        triggerJumpscare('FREDDY');
+    }
+
+    nightTimer++;
+    if (nightTimer > 1100) {
+        nightTimer = 0;
+        hour++;
+        document.getElementById('time-val').textContent = hour === 0 ? '12' : hour;
+
+        if (hour === 6) {
+            gameRunning = false;
+            document.getElementById('win-screen').style.display = 'flex';
+            setTimeout(() => { document.getElementById('win-6am').style.display = 'block'; }, 1000);
+        }
+    }
+
+    updateAI();
+}
+
+function gameLoop() {
+    if (gameRunning) {
+        updateGameLogic();
+        render();
+    }
     requestAnimationFrame(gameLoop);
 }
 
-gameLoop();
-
+function startNight() {
+    document.getElementById('menu-screen').style.display = 'none';
+    gameRunning = true;
+    gameLoop();
+}
