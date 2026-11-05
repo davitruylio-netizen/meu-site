@@ -11,3 +11,88 @@
     <script src="script.js"></script>
 </body>
 </html>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meu Celular Web</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+        body { background: #1a1a2e; color: #fff; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 10px; }
+        .phone { width: 100%; max-width: 380px; height: 680px; background: #0f0f1b; border: 12px solid #333; border-radius: 40px; display: flex; flex-direction: column; overflow: hidden; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .screen { flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
+        .app-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center; }
+        .app-icon { background: #252542; border-radius: 18px; padding: 15px 5px; cursor: pointer; font-size: 28px; transition: 0.2s; border: 1px solid #3b3b5c; }
+        .app-icon:active { transform: scale(0.95); background: #3b3b5c; }
+        .app-icon span { display: block; font-size: 11px; margin-top: 5px; color: #ccc; }
+        .app-window { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a2e; padding: 15px; flex-direction: column; gap: 10px; z-index: 10; }
+        .active { display: flex; }
+        .app-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; }
+        .btn-back { background: #e74c3c; border: none; color: #fff; padding: 5px 10px; border-radius: 8px; cursor: pointer; }
+        input, button, textarea { width: 100%; padding: 10px; border-radius: 8px; border: none; outline: none; }
+        button { background: #4a90e2; color: white; cursor: pointer; font-weight: bold; }
+        .chat-box { flex: 1; background: #0f0f1b; border-radius: 8px; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+        .msg-user { background: #4a90e2; align-self: flex-end; padding: 8px; border-radius: 8px; max-width: 80%; }
+        .msg-ai { background: #333; align-self: flex-start; padding: 8px; border-radius: 8px; max-width: 80%; }
+        .calc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+        .calc-grid button { font-size: 18px; padding: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="phone">
+    <!-- Tela Inicial -->
+    <div class="screen" id="home-screen">
+        <h2 style="text-align: center; margin-top: 20px;">WebOS Mobile</h2>
+        <div class="app-grid">
+            <div class="app-icon" onclick="openApp('app-google')">🔍<span>Google</span></div>
+            <div class="app-icon" onclick="openApp('app-calc')">🧮<span>Calculadora</span></div>
+            <div class="app-icon" onclick="openApp('app-ai')">🤖<span>Assistente IA</span></div>
+        </div>
+    </div>
+
+    <!-- App Google -->
+    <div class="app-window" id="app-google">
+        <div class="app-header">
+            <h3>Google Search</h3>
+            <button class="btn-back" onclick="closeApp('app-google')">Voltar</button>
+        </div>
+        <input type="text" id="search-query" placeholder="Digite o que quer pesquisar...">
+        <button onclick="searchGoogle()">Pesquisar no Google</button>
+    </div>
+
+    <!-- App Calculadora -->
+    <div class="app-window" id="app-calc">
+        <div class="app-header">
+            <h3>Calculadora</h3>
+            <button class="btn-back" onclick="closeApp('app-calc')">Voltar</button>
+        </div>
+        <input type="text" id="calc-display" readonly style="text-align: right; font-size: 24px;">
+        <div class="calc-grid">
+            <button onclick="calcInput('7')">7</button><button onclick="calcInput('8')">8</button><button onclick="calcInput('9')">9</button><button onclick="calcInput('/')">÷</button>
+            <button onclick="calcInput('4')">4</button><button onclick="calcInput('5')">5</button><button onclick="calcInput('6')">6</button><button onclick="calcInput('*')">×</button>
+            <button onclick="calcInput('1')">1</button><button onclick="calcInput('2')">2</button><button onclick="calcInput('3')">3</button><button onclick="calcInput('-')">-</button>
+            <button onclick="clearCalc()">C</button><button onclick="calcInput('0')">0</button><button onclick="calculateResult()">=</button><button onclick="calcInput('+')">+</button>
+        </div>
+    </div>
+
+    <!-- App IA -->
+    <div class="app-window" id="app-ai">
+        <div class="app-header">
+            <h3>Assistente IA</h3>
+            <button class="btn-back" onclick="closeApp('app-ai')">Voltar</button>
+        </div>
+        <div class="chat-box" id="chat-box">
+            <div class="msg-ai">Olá! Como posso te ajudar hoje?</div>
+        </div>
+        <div style="display: flex; gap: 5px;">
+            <input type="text" id="ai-input" placeholder="Pergunte algo...">
+            <button onclick="sendAIMessage()" style="width: auto;">Enviar</button>
+        </div>
+    </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
