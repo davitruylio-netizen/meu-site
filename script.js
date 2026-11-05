@@ -1,385 +1,368 @@
+// =============================================================================
+// ECLIPSE: O ÚLTIMO MUNDO — ENGINE PRINCIPAL (FASE 1)
+// =============================================================================
+
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+
+// Canvas Secundário para Sistema de Iluminação Dinâmica (Lightmap Overlay)
+const lightCanvas = document.createElement('canvas');
+lightCanvas.width = canvas.width;
+lightCanvas.height = canvas.height;
+const lightCtx = lightCanvas.getContext('2d');
+
 ctx.imageSmoothingEnabled = false;
 
-// --- TECLAS E ESTADO DOS CONTROLES ---
-const keys = {};
-window.addEventListener('keydown', e => {
-    if (!keys[e.code]) {
-        if (e.code === 'KeyW' || e.code === 'Space') player.jump();
-        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') player.dash();
-        if (e.code === 'KeyE') interact();
-    }
-    keys[e.code] = true;
-});
-window.addEventListener('keyup', e => keys[e.code] = false);
+// --- CONFIGURAÇÕES DE REDE E MUNDO ---
+const TILE_SIZE = 32;
+const MAP_COLS = 40;
+const MAP_ROWS = 30;
+const WORLD_WIDTH = MAP_COLS * TILE_SIZE;   // 1280px
+const WORLD_HEIGHT = MAP_ROWS * TILE_SIZE; // 960px
 
-// --- SISTEMA DE PARTÍCULAS ---
-let particles = [];
-function createParticles(x, y, color, count = 5) {
-    for (let i = 0; i < count; i++) {
-        particles.push({
-            x: x, y: y,
-            vx: (Math.random() - 0.5) * 4,
-            vy: (Math.random() - 0.5) * 4,
-            size: Math.random() * 3 + 1,
-            color: color,
-            life: 20
-        });
-    }
-}
+// --- CONTROLES DA CÂMERA (SMOOTH DAMP) ---
+const camera = {
+    x: 0, y: 0,
+    width: canvas.width,
+    height: canvas.height,
+    follow(target) {
+        // Interpolação suave para manter a câmera centralizada no jogador
+        let targetX = target.x + target.width / 2 - this.width / 2;
+        let targetY = target.y + target.height / 2 - this.height / 2;
 
-// --- CLASSE DO JOGADOR ---
-class Player {
+        this.x += (targetX - this.x) * 0.08;
+        this.y += (targetY - this.y) * 0.08;
+
+        // Limites do Mundo
+        this.x = Math.max(0, Math.min(this.x, WORLD_WIDTH - this.width));
+        this.y = Math.max(0, Math.min(this.y, WORLD_HEIGHT - this.height));
+    }
+};
+
+// --- CONTROLES DE TECLADO ---
+const input = {
+    keys: {},
+    init() {
+        window.addEventListener('keydown', e => this.keys[e.code] = true);
+        window.addEventListener('keyup', e => this.keys[e.code] = false);
+    }
+};
+input.init();
+
+// --- CLASSE PROTAGONISTA ---
+class Hero {
     constructor(x, y) {
         this.x = x; this.y = y;
-        this.width = 24; this.height = 32;
-        this.vx = 0; this.vy = 0;
-        this.speed = 4.5;
-        this.jumpForce = -9.5;
-        this.jumpCount = 0;
-        this.maxJumps = 2;
-        this.grounded = false;
-        this.facing = 'right';
-        this.animFrame = 0;
+        this.width = 24; this.height = 28;
+        this.speed = 2.8;
+        this.facing = 'down'; // 'up', 'down', 'left', 'right'
         
-        // Habilidades Especiais
+        // Atributos de Combate
+        this.maxHp = 100; this.hp = 100;
+        this.maxStamina = 100; this.stamina = 100;
+        
+        // Animação & Estados
+        this.animFrame = 0;
         this.isDashing = false;
+        this.dashTimer = 0;
         this.dashCooldown = 0;
-        this.hasKey = false;
+        this.invulnerable = false;
     }
 
-    jump() {
-        if (dialogueSystem.active) return;
-        if (this.jumpCount < this.maxJumps) {
-            this.vy = this.jumpForce;
-            this.jumpCount++;
-            this.grounded = false;
-            createParticles(this.x + 12, this.y + 30, '#00f0ff', 8);
+    update(obstacles) {
+        // Regeneração natural de Stamina
+        if (this.stamina < this.maxStamina && !this.isDashing) {
+            this.stamina = Math.min(this.maxStamina, this.stamina + 0.4);
         }
-    }
 
-    dash() {
-        if (this.dashCooldown === 0 && !dialogueSystem.active) {
-            this.isDashing = true;
-            this.vx = (this.facing === 'right' ? 1 : -1) * 12;
-            this.dashCooldown = 40;
-            createParticles(this.x + 12, this.y + 16, '#ff0055', 10);
-        }
-    }
-
-    update(platforms) {
-        if (dialogueSystem.active) return;
-
-        // Diminui Cooldowns
         if (this.dashCooldown > 0) this.dashCooldown--;
 
-        // Movimento Horizontal
-        if (!this.isDashing) {
-            if (keys['KeyA'] || keys['ArrowLeft']) {
-                this.vx = -this.speed; this.facing = 'left';
-            } else if (keys['KeyD'] || keys['ArrowRight']) {
-                this.vx = this.speed; this.facing = 'right';
-            } else {
-                this.vx *= 0.75;
+        let dx = 0; let dy = 0;
+
+        // Trata Esquiva (Dash)
+        if (this.isDashing) {
+            this.dashTimer--;
+            if (this.facing === 'left') dx = -this.speed * 2.5;
+            if (this.facing === 'right') dx = this.speed * 2.5;
+            if (this.facing === 'up') dy = -this.speed * 2.5;
+            if (this.facing === 'down') dy = this.speed * 2.5;
+
+            if (this.dashTimer <= 0) {
+                this.isDashing = false;
+                this.invulnerable = false;
             }
         } else {
-            if (Math.abs(this.vx) < 5) this.isDashing = false;
+            // Controles de Movimentação Normais
+            if (input.keys['KeyA'] || input.keys['ArrowLeft']) { dx -= 1; this.facing = 'left'; }
+            if (input.keys['KeyD'] || input.keys['ArrowRight']) { dx += 1; this.facing = 'right'; }
+            if (input.keys['KeyW'] || input.keys['ArrowUp']) { dy -= 1; this.facing = 'up'; }
+            if (input.keys['KeyS'] || input.keys['ArrowDown']) { dy += 1; this.facing = 'down'; }
+
+            // Normaliza vetor diagonal
+            if (dx !== 0 && dy !== 0) {
+                dx *= 0.7071; dy *= 0.7071;
+            }
+
+            dx *= this.speed;
+            dy *= this.speed;
+
+            // Ativação do Dash (Tecla Espaço / Shift)
+            if ((input.keys['Space'] || input.keys['ShiftLeft']) && this.stamina >= 30 && this.dashCooldown === 0 && (dx !== 0 || dy !== 0)) {
+                this.isDashing = true;
+                this.dashTimer = 12;
+                this.dashCooldown = 30;
+                this.stamina -= 30;
+                this.invulnerable = true;
+            }
         }
 
-        // Gravidade
-        this.vy += 0.45;
-
-        // Colisão X
-        this.x += this.vx;
-        platforms.forEach(p => {
-            if (checkCollision(this, p)) {
-                if (this.vx > 0) this.x = p.x - this.width;
-                if (this.vx < 0) this.x = p.x + p.width;
+        // Colisão com Obstáculos Eixo X
+        this.x += dx;
+        for (let obj of obstacles) {
+            if (checkAABB(this, obj)) {
+                if (dx > 0) this.x = obj.x - this.width;
+                if (dx < 0) this.x = obj.x + obj.width;
             }
-        });
+        }
 
-        // Colisão Y
-        this.y += this.vy;
-        this.grounded = false;
-        platforms.forEach(p => {
-            if (checkCollision(this, p)) {
-                if (this.vy > 0) {
-                    this.y = p.y - this.height;
-                    this.vy = 0;
-                    this.grounded = true;
-                    this.jumpCount = 0;
-                } else if (this.vy < 0) {
-                    this.y = p.y + p.height;
-                    this.vy = 0;
-                }
+        // Colisão com Obstáculos Eixo Y
+        this.y += dy;
+        for (let obj of obstacles) {
+            if (checkAABB(this, obj)) {
+                if (dy > 0) this.y = obj.y - this.height;
+                if (dy < 0) this.y = obj.y + obj.height;
             }
-        });
+        }
 
         // Limites do Mapa
-        if (this.x < 0) this.x = 0;
-        if (this.y > canvas.height) { this.x = 40; this.y = 300; this.vy = 0; }
+        this.x = Math.max(0, Math.min(this.x, WORLD_WIDTH - this.width));
+        this.y = Math.max(0, Math.min(this.y, WORLD_HEIGHT - this.height));
 
-        this.animFrame += 0.15;
+        if (dx !== 0 || dy !== 0) this.animFrame += 0.15;
+        this.updateHUD();
+    }
+
+    updateHUD() {
+        document.getElementById('hp-bar').style.width = `${(this.hp / this.maxHp) * 100}%`;
+        document.getElementById('stamina-bar').style.width = `${(this.stamina / this.maxStamina) * 100}%`;
+        document.getElementById('hp-val').textContent = `${Math.ceil(this.hp)}/${this.maxHp}`;
+        document.getElementById('stamina-val').textContent = `${Math.ceil(this.stamina)}/${this.maxStamina}`;
     }
 
     draw() {
+        const renderX = this.x - camera.x;
+        const renderY = this.y - camera.y;
+
         ctx.save();
-        const isMoving = Math.abs(this.vx) > 0.5;
-        const bob = isMoving ? Math.sin(this.animFrame) * 2 : 0;
 
-        // Efeito Visual do Dash (Rastro)
+        // Rastro de Ilusão durante o Dash
         if (this.isDashing) {
-            ctx.fillStyle = 'rgba(255, 0, 85, 0.4)';
-            ctx.fillRect(this.x - (this.facing==='right'?8:-8), this.y, this.width, this.height);
+            ctx.fillStyle = 'rgba(156, 39, 176, 0.4)';
+            ctx.fillRect(renderX - 4, renderY - 4, this.width + 8, this.height + 8);
         }
 
-        // Traje Neon
-        ctx.fillStyle = '#ff0055';
-        ctx.fillRect(this.x, this.y + 10 + bob, this.width, this.height - 10);
-        
-        // Detalhes Neon Brilhantes
-        ctx.fillStyle = '#00f0ff';
-        ctx.fillRect(this.x + 4, this.y + 16 + bob, 16, 3);
+        // Sombra do Personagem
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.beginPath();
+        ctx.ellipse(renderX + this.width / 2, renderY + this.height - 2, 10, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-        // Cabeça & Capacete
-        ctx.fillStyle = '#1a1c29';
-        ctx.fillRect(this.x + 2, this.y + bob, 20, 12);
-        
-        // Viseira Futurista
-        ctx.fillStyle = '#00f0ff';
-        if (this.facing === 'right') {
-            ctx.fillRect(this.x + 12, this.y + 4 + bob, 8, 4);
-        } else {
-            ctx.fillRect(this.x + 4, this.y + 4 + bob, 8, 4);
-        }
+        // Corpo Principal (Cores Dark Fantasy)
+        ctx.fillStyle = '#2a1b4e';
+        ctx.fillRect(renderX, renderY + 8, this.width, this.height - 8);
+
+        // Capa / Túnica
+        ctx.fillStyle = '#7b1fa2';
+        ctx.fillRect(renderX + 3, renderY + 10, this.width - 6, this.height - 12);
+
+        // Cabeça
+        ctx.fillStyle = '#e0d6f6';
+        ctx.fillRect(renderX + 4, renderY, 16, 12);
+
+        // Olhos / Viseira (Mudar orientação conforme direção)
+        ctx.fillStyle = '#ff1744';
+        if (this.facing === 'down') ctx.fillRect(renderX + 6, renderY + 5, 12, 3);
+        if (this.facing === 'up') ctx.fillRect(renderX + 6, renderY + 2, 12, 2);
+        if (this.facing === 'left') ctx.fillRect(renderX + 4, renderY + 5, 6, 3);
+        if (this.facing === 'right') ctx.fillRect(renderX + 14, renderY + 5, 6, 3);
 
         ctx.restore();
     }
 }
 
-// --- CLASSE DOS INIMIGOS PATRULHEIROS ---
-class Enemy {
-    constructor(x, y, range) {
-        this.x = x; this.y = y;
-        this.width = 24; this.height = 24;
-        this.startX = x;
-        this.range = range;
-        this.speed = 1.8;
-        this.dir = 1;
-    }
-
-    update() {
-        this.x += this.speed * this.dir;
-        if (Math.abs(this.x - this.startX) > this.range) {
-            this.dir *= -1;
-        }
-
-        // Colisão com Jogador
-        if (checkCollision(player, this)) {
-            player.x = 40; player.y = 300; // Reseta ao tomar dano
-            createParticles(player.x, player.y, '#ff0055', 12);
-        }
-    }
-
-    draw() {
-        ctx.fillStyle = '#e74c3c';
-        ctx.fillRect(this.x, this.y, this.width, this.height);
-        ctx.fillStyle = '#ffff00';
-        ctx.fillRect(this.x + (this.dir===1?14:4), this.y + 6, 6, 6);
-    }
+// --- COLISÕES DE CAIXA ENVOLVENTE (AABB) ---
+function checkAABB(r1, r2) {
+    return r1.x < r2.x + r2.width &&
+           r1.x + r1.width > r2.x &&
+           r1.y < r2.y + r2.height &&
+           r1.y + r1.height > r2.y;
 }
 
-// --- SISTEMA DE DIÁLOGOS ---
-const dialogueSystem = {
-    active: false,
-    speaker: '',
-    text: '',
-    charIndex: 0,
-    fullText: '',
-    
-    start(speaker, text) {
-        this.active = true;
-        this.speaker = speaker;
-        this.fullText = text;
-        this.text = '';
-        this.charIndex = 0;
-    },
-    
-    update() {
-        if (this.active && this.charIndex < this.fullText.length) {
-            this.text += this.fullText[this.charIndex];
-            this.charIndex++;
-        }
-    },
+// --- GERAÇÃO DA REGIÃO 1: FLORESTA DOS PERDIDOS ---
+const obstacles = [];
+const lights = []; // Fontes de luz estáticas/dinâmicas
 
-    draw() {
-        if (!this.active) return;
-        
-        // Caixa do Diálogo
-        ctx.fillStyle = 'rgba(13, 14, 23, 0.95)';
-        ctx.strokeStyle = '#00f0ff';
-        ctx.lineWidth = 2;
-        ctx.fillRect(50, 340, 750, 110);
-        ctx.strokeRect(50, 340, 750, 110);
+function generateForestLevel() {
+    // Paredes externas da floresta
+    obstacles.push({ x: 0, y: 0, width: WORLD_WIDTH, height: 32 });
+    obstacles.push({ x: 0, y: WORLD_HEIGHT - 32, width: WORLD_WIDTH, height: 32 });
+    obstacles.push({ x: 0, y: 0, width: 32, height: WORLD_HEIGHT });
+    obstacles.push({ x: WORLD_WIDTH - 32, y: 0, width: 32, height: WORLD_HEIGHT });
 
-        // Retrato em Pixel Art do Locutor
-        ctx.fillStyle = '#ff0055';
-        ctx.fillRect(70, 355, 60, 60);
-        ctx.fillStyle = '#00f0ff';
-        ctx.fillRect(80, 370, 40, 15);
+    // Árvores antigas e ruínas
+    const treePositions = [
+        {x: 200, y: 150}, {x: 400, y: 180}, {x: 650, y: 120},
+        {x: 180, y: 400}, {x: 500, y: 550}, {x: 850, y: 350},
+        {x: 950, y: 600}, {x: 300, y: 700}
+    ];
 
-        // Nome & Texto
-        ctx.fillStyle = '#00f0ff';
-        ctx.font = 'bold 16px "Courier New", monospace';
-        ctx.fillText(this.speaker, 150, 370);
+    treePositions.forEach(pos => {
+        obstacles.push({ x: pos.x, y: pos.y, width: 64, height: 64, type: 'tree' });
+    });
 
-        ctx.fillStyle = '#fff';
-        ctx.font = '14px "Courier New", monospace';
-        ctx.fillText(this.text, 150, 400);
-
-        ctx.fillStyle = '#888';
-        ctx.font = '11px monospace';
-        ctx.fillText('[Pressione E para continuar]', 620, 435);
-    }
-};
-
-// --- ELEMENTOS DO MAPA E OBJETOS ---
-const platforms = [
-    { x: 0, y: 430, width: 850, height: 50, color: '#161925', top: '#00f0ff' },
-    { x: 120, y: 340, width: 140, height: 16, color: '#212638', top: '#ff0055' },
-    { x: 330, y: 270, width: 140, height: 16, color: '#212638', top: '#00f0ff' },
-    { x: 550, y: 200, width: 160, height: 16, color: '#212638', top: '#ff0055' },
-    { x: 740, y: 130, width: 110, height: 16, color: '#212638', top: '#00f0ff' }
-];
-
-const items = [
-    { type: 'key', x: 620, y: 160, width: 16, height: 16, collected: false },
-    { type: 'coin', x: 180, y: 300, collected: false },
-    { type: 'coin', x: 390, y: 230, collected: false }
-];
-
-const npc = { x: 70, y: 398, width: 24, height: 32 };
-const door = { x: 790, y: 55, width: 30, height: 75, locked: true };
-
-const player = new Player(40, 300);
-const enemies = [new Enemy(340, 246, 80)];
-let score = 0;
-
-// Interações pelo Cenário
-function interact() {
-    if (dialogueSystem.active) {
-        if (dialogueSystem.charIndex >= dialogueSystem.fullText.length) {
-            dialogueSystem.active = false;
-        } else {
-            dialogueSystem.text = dialogueSystem.fullText;
-            dialogueSystem.charIndex = dialogueSystem.fullText.length;
-        }
-        return;
-    }
-
-    // NPC Fala
-    if (Math.abs(player.x - npc.x) < 40 && Math.abs(player.y - npc.y) < 40) {
-        dialogueSystem.start("GUARDIÃO CYBER", "Cuidado, viajante! Pegue o Cartão de Acesso no topo do complexo para abrir o Portal de Saída!");
-    }
-
-    // Tentar Abrir Porta
-    if (Math.abs(player.x - door.x) < 40 && Math.abs(player.y - door.y) < 80) {
-        if (player.hasKey) {
-            dialogueSystem.start("SISTEMA NEON", "Acesso Autorizado! Você concluiu a Fase 1!");
-            door.locked = false;
-        } else {
-            dialogueSystem.start("SISTEMA NEON", "Acesso Negado! Encontre o Cartão de Acesso azul primeiro.");
-        }
-    }
+    // Tochas antigas com luz mística
+    lights.push({ x: 300, y: 250, radius: 140, color: 'rgba(156, 39, 176, 0.8)' });
+    lights.push({ x: 700, y: 450, radius: 160, color: 'rgba(239, 83, 80, 0.7)' });
+    lights.push({ x: 1000, y: 200, radius: 180, color: 'rgba(0, 230, 118, 0.7)' });
 }
 
-function checkCollision(r1, r2) {
-    return r1.x < r2.x + r2.width && r1.x + r1.width > r2.x &&
-           r1.y < r2.y + r2.height && r1.y + r1.height > r2.y;
-}
+generateForestLevel();
 
-// --- GAME LOOP ---
-function gameLoop() {
-    // 1. Fundo Gradiente Cyberpunk
-    ctx.fillStyle = '#0a0b12';
+const player = new Hero(100, 100);
+
+// --- RENDERIZAÇÃO DO AMBIENTE E SISTEMA DE LUZ ---
+function renderMap() {
+    // Fundo do Chão da Floresta (Tons de Azul e Roxo Escuro)
+    ctx.fillStyle = '#0a0514';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 2. Atualizações
-    player.update(platforms);
-    enemies.forEach(e => e.update());
-    dialogueSystem.update();
+    // Grid e Textura do Solo
+    ctx.strokeStyle = '#140a28';
+    ctx.lineWidth = 1;
 
-    // Partículas
-    particles.forEach((p, index) => {
-        p.x += p.vx; p.y += p.vy; p.life--;
-        ctx.fillStyle = p.color;
-        ctx.fillRect(p.x, p.y, p.size, p.size);
-        if (p.life <= 0) particles.splice(index, 1);
-    });
+    let startCol = Math.floor(camera.x / TILE_SIZE);
+    let endCol = startCol + Math.ceil(camera.width / TILE_SIZE) + 1;
+    let startRow = Math.floor(camera.y / TILE_SIZE);
+    let endRow = startRow + Math.ceil(camera.height / TILE_SIZE) + 1;
 
-    // Coleta de Itens
-    items.forEach(item => {
-        if (!item.collected && checkCollision(player, { x: item.x, y: item.y, width: 16, height: 16 })) {
-            item.collected = true;
-            if (item.type === 'key') {
-                player.hasKey = true;
-                createParticles(item.x, item.y, '#00f0ff', 15);
-            } else {
-                score += 250;
-                createParticles(item.x, item.y, '#ffff00', 8);
-            }
+    for (let c = startCol; c < endCol; c++) {
+        for (let r = startRow; r < endRow; r++) {
+            let x = c * TILE_SIZE - camera.x;
+            let y = r * TILE_SIZE - camera.y;
+            ctx.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
+        }
+    }
+
+    // Desenha Obstáculos e Ruínas
+    obstacles.forEach(obs => {
+        const rx = obs.x - camera.x;
+        const ry = obs.y - camera.y;
+
+        if (obs.type === 'tree') {
+            // Tronco
+            ctx.fillStyle = '#1b002c';
+            ctx.fillRect(rx + 20, ry + 30, 24, 34);
+            // Copa em Camadas Dark Fantasy
+            ctx.fillStyle = '#311b92';
+            ctx.beginPath(); ctx.arc(rx + 32, ry + 25, 30, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#4527a0';
+            ctx.beginPath(); ctx.arc(rx + 32, ry + 20, 20, 0, Math.PI * 2); ctx.fill();
+        } else {
+            ctx.fillStyle = '#120726';
+            ctx.fillRect(rx, ry, obs.width, obs.height);
+            ctx.strokeStyle = '#311b92';
+            ctx.strokeRect(rx, ry, obs.width, obs.height);
         }
     });
+}
 
-    // 3. Desenho de Elementos
-    // Plataformas
-    platforms.forEach(p => {
-        ctx.fillStyle = p.color;
-        ctx.fillRect(p.x, p.y, p.width, p.height);
-        ctx.fillStyle = p.top;
-        ctx.fillRect(p.x, p.y, p.width, 3);
+// --- ENGINE DE ILUMINAÇÃO DINÂMICA ---
+function renderLighting() {
+    // 1. Limpa o canvas secundário com a escuridão da noite/eclipse
+    lightCtx.fillStyle = 'rgba(4, 2, 10, 0.92)';
+    lightCtx.fillRect(0, 0, lightCanvas.width, lightCanvas.height);
+
+    lightCtx.globalCompositeOperation = 'destination-out';
+
+    // 2. Luz Própria do Protagonista (A Espada Consciente)
+    const playerLightX = (player.x + player.width / 2) - camera.x;
+    const playerLightY = (player.y + player.height / 2) - camera.y;
+
+    let pGrad = lightCtx.createRadialGradient(playerLightX, playerLightY, 10, playerLightX, playerLightY, 120);
+    pGrad.addColorStop(0, 'rgba(0, 0, 0, 1)');
+    pGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    lightCtx.fillStyle = pGrad;
+    lightCtx.beginPath();
+    lightCtx.arc(playerLightX, playerLightY, 120, 0, Math.PI * 2);
+    lightCtx.fill();
+
+    // 3. Luzes dos Objetos da Floresta
+    lights.forEach(l => {
+        const lx = l.x - camera.x;
+        const ly = l.y - camera.y;
+
+        let grad = lightCtx.createRadialGradient(lx, ly, 5, lx, ly, l.radius);
+        grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+        lightCtx.fillStyle = grad;
+        lightCtx.beginPath();
+        lightCtx.arc(lx, ly, l.radius, 0, Math.PI * 2);
+        lightCtx.fill();
     });
 
-    // NPC
-    ctx.fillStyle = '#00f0ff';
-    ctx.fillRect(npc.x, npc.y, npc.width, npc.height);
-    ctx.fillStyle = '#fff';
-    ctx.fillText("NPC [E]", npc.x - 6, npc.y - 8);
+    lightCtx.globalCompositeOperation = 'source-over';
 
-    // Porta de Saída
-    ctx.fillStyle = door.locked ? '#ff0055' : '#00f0ff';
-    ctx.fillRect(door.x, door.y, door.width, door.height);
-    ctx.fillStyle = '#fff';
-    ctx.fillText(door.locked ? "TRANCADO" : "SAÍDA", door.x - 10, door.y - 10);
+    // 4. Aplica a camada de sombra por cima do canvas principal
+    ctx.drawImage(lightCanvas, 0, 0);
+}
 
-    // Itens
-    items.forEach(item => {
-        if (!item.collected) {
-            if (item.type === 'key') {
-                ctx.fillStyle = '#00f0ff';
-                ctx.fillRect(item.x, item.y, 14, 14);
-            } else {
-                ctx.fillStyle = '#ffd700';
-                ctx.fillRect(item.x + 2, item.y, 10, 14);
-            }
-        }
-    });
+// --- GAME LOOP PRINCIPAL ---
+let isGameRunning = false;
 
-    // Inimigos e Jogador
-    enemies.forEach(e => e.draw());
-    player.draw();
+function gameLoop() {
+    if (isGameRunning) {
+        // Atualizações
+        player.update(obstacles);
+        camera.follow(player);
 
-    // 4. Interface HUD (Pontuação & Inventário)
-    ctx.fillStyle = '#fff';
-    ctx.font = '14px "Courier New", monospace';
-    ctx.fillText(`PONTOS: ${score}`, 20, 30);
-    ctx.fillText(`CARTÃO DE ACESSO: ${player.hasKey ? "POSSUI" : "NÃO POSSUI"}`, 20, 50);
-
-    // 5. Renderizar Diálogo Por Cima
-    dialogueSystem.draw();
+        // Desenho
+        renderMap();
+        player.draw();
+        renderLighting();
+    }
 
     requestAnimationFrame(gameLoop);
 }
 
+// --- CONTROLE DAS TELAS & MENU ---
+function startGame() {
+    document.getElementById('main-menu').style.display = 'none';
+    document.getElementById('hud-layer').style.display = 'flex';
+    isGameRunning = true;
+
+    // Diálogo Introdutório
+    setTimeout(() => {
+        showDialogue("ESPRITO DA ESPADA", "Você despertou... 700 anos se passaram desde que as cinzas cobriram este mundo. Lembre-se de quem você é.");
+    }, 1000);
+}
+
+function showDialogue(speaker, text) {
+    const box = document.getElementById('dialogue-box');
+    document.getElementById('speaker-name').textContent = speaker;
+    document.getElementById('dialogue-text').textContent = text;
+    box.style.display = 'flex';
+
+    setTimeout(() => {
+        box.style.display = 'none';
+    }, 6000);
+}
+
+function showCredits() {
+    alert("ECLIPSE — O ÚLTIMO MUNDO\nDesenvolvido com HTML5 Canvas e JavaScript Puro.");
+}
+
+// Inicia o Loop da Engine
 gameLoop();
+
