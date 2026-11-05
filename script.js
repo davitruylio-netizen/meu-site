@@ -1,368 +1,303 @@
 // =============================================================================
-// ECLIPSE: O ÚLTIMO MUNDO — ENGINE PRINCIPAL (FASE 1)
+// URBAN FLOW — MOTOR DE PARKOUR & ANIMAÇÃO PROCEDURAL
 // =============================================================================
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Canvas Secundário para Sistema de Iluminação Dinâmica (Lightmap Overlay)
-const lightCanvas = document.createElement('canvas');
-lightCanvas.width = canvas.width;
-lightCanvas.height = canvas.height;
-const lightCtx = lightCanvas.getContext('2d');
+// --- TECLAS E INPUTS ---
+const keys = {};
+window.addEventListener('keydown', e => keys[e.code] = true);
+window.addEventListener('keyup', e => keys[e.code] = false);
 
-ctx.imageSmoothingEnabled = false;
-
-// --- CONFIGURAÇÕES DE REDE E MUNDO ---
-const TILE_SIZE = 32;
-const MAP_COLS = 40;
-const MAP_ROWS = 30;
-const WORLD_WIDTH = MAP_COLS * TILE_SIZE;   // 1280px
-const WORLD_HEIGHT = MAP_ROWS * TILE_SIZE; // 960px
-
-// --- CONTROLES DA CÂMERA (SMOOTH DAMP) ---
+// --- CÂMERA DE ACOMPANHAMENTO FLUIDO ---
 const camera = {
     x: 0, y: 0,
     width: canvas.width,
     height: canvas.height,
     follow(target) {
-        // Interpolação suave para manter a câmera centralizada no jogador
-        let targetX = target.x + target.width / 2 - this.width / 2;
-        let targetY = target.y + target.height / 2 - this.height / 2;
-
-        this.x += (targetX - this.x) * 0.08;
-        this.y += (targetY - this.y) * 0.08;
-
-        // Limites do Mundo
-        this.x = Math.max(0, Math.min(this.x, WORLD_WIDTH - this.width));
-        this.y = Math.max(0, Math.min(this.y, WORLD_HEIGHT - this.height));
+        let targetX = target.x - 200;
+        let targetY = target.y - 300;
+        this.x += (targetX - this.x) * 0.1;
+        this.y += (targetY - this.y) * 0.1;
     }
 };
 
-// --- CONTROLES DE TECLADO ---
-const input = {
-    keys: {},
-    init() {
-        window.addEventListener('keydown', e => this.keys[e.code] = true);
-        window.addEventListener('keyup', e => this.keys[e.code] = false);
-    }
-};
-input.init();
-
-// --- CLASSE PROTAGONISTA ---
-class Hero {
+// --- PROTAGONISTA & MÁQUINA DE ESTADOS DE ANIMAÇÃO ---
+class ParkourRunner {
     constructor(x, y) {
         this.x = x; this.y = y;
-        this.width = 24; this.height = 28;
-        this.speed = 2.8;
-        this.facing = 'down'; // 'up', 'down', 'left', 'right'
-        
-        // Atributos de Combate
-        this.maxHp = 100; this.hp = 100;
-        this.maxStamina = 100; this.stamina = 100;
-        
-        // Animação & Estados
-        this.animFrame = 0;
-        this.isDashing = false;
-        this.dashTimer = 0;
-        this.dashCooldown = 0;
-        this.invulnerable = false;
+        this.width = 24; this.height = 48;
+        this.vx = 0; this.vy = 0;
+        this.speed = 6;
+        this.jumpForce = -12;
+        this.grounded = false;
+        this.isClimbing = false;
+
+        // Máquina de Estados
+        this.state = 'RUN'; // 'IDLE', 'RUN', 'JUMP', 'FALL', 'SLIDE', 'ROLL', 'CLIMB'
+        this.animTimer = 0;
+        this.rollTimer = 0;
+        this.slideTimer = 0;
+
+        // Esqueleto Procedural para Animações Ultra-Fluidas
+        this.pose = {
+            head: { x: 0, y: -20 },
+            body: { x: 0, y: 0 },
+            leftArm: { x: -8, y: -5 },
+            rightArm: { x: 8, y: -5 },
+            leftLeg: { x: -6, y: 20 },
+            rightLeg: { x: 6, y: 20 }
+        };
     }
 
-    update(obstacles) {
-        // Regeneração natural de Stamina
-        if (this.stamina < this.maxStamina && !this.isDashing) {
-            this.stamina = Math.min(this.maxStamina, this.stamina + 0.4);
+    update(platforms) {
+        this.animTimer += 0.2;
+
+        // Lógica de Movimento e Entrada de Teclas
+        const isRight = keys['KeyD'] || keys['ArrowRight'];
+        const isLeft = keys['KeyA'] || keys['ArrowLeft'];
+        const isJump = keys['KeyW'] || keys['Space'] || keys['ArrowUp'];
+        const isCrouch = keys['KeyS'] || keys['ArrowDown'];
+
+        if (this.isClimbing) {
+            this.vy = -3;
+            this.vx = 0;
+            this.state = 'CLIMB';
+            if (this.animTimer > 3) {
+                this.isClimbing = false;
+                this.y -= 25;
+                this.vy = 0;
+            }
+            return;
         }
 
-        if (this.dashCooldown > 0) this.dashCooldown--;
-
-        let dx = 0; let dy = 0;
-
-        // Trata Esquiva (Dash)
-        if (this.isDashing) {
-            this.dashTimer--;
-            if (this.facing === 'left') dx = -this.speed * 2.5;
-            if (this.facing === 'right') dx = this.speed * 2.5;
-            if (this.facing === 'up') dy = -this.speed * 2.5;
-            if (this.facing === 'down') dy = this.speed * 2.5;
-
-            if (this.dashTimer <= 0) {
-                this.isDashing = false;
-                this.invulnerable = false;
-            }
+        // Movimentação Horizontal
+        if (isRight) {
+            this.vx = this.speed;
+        } else if (isLeft) {
+            this.vx = -this.speed * 0.6;
         } else {
-            // Controles de Movimentação Normais
-            if (input.keys['KeyA'] || input.keys['ArrowLeft']) { dx -= 1; this.facing = 'left'; }
-            if (input.keys['KeyD'] || input.keys['ArrowRight']) { dx += 1; this.facing = 'right'; }
-            if (input.keys['KeyW'] || input.keys['ArrowUp']) { dy -= 1; this.facing = 'up'; }
-            if (input.keys['KeyS'] || input.keys['ArrowDown']) { dy += 1; this.facing = 'down'; }
+            this.vx *= 0.85;
+        }
 
-            // Normaliza vetor diagonal
-            if (dx !== 0 && dy !== 0) {
-                dx *= 0.7071; dy *= 0.7071;
+        // Rolamento / Deslizamento
+        if (isCrouch && this.grounded && this.slideTimer === 0) {
+            this.slideTimer = 25;
+            this.state = 'SLIDE';
+        }
+
+        if (this.slideTimer > 0) {
+            this.slideTimer--;
+            this.vx = 8;
+        }
+
+        // Pulo
+        if (isJump && this.grounded && this.slideTimer === 0) {
+            this.vy = this.jumpForce;
+            this.grounded = false;
+            this.state = 'JUMP';
+        }
+
+        // Aplicar Gravidade
+        this.vy += 0.55;
+
+        // Atualização de Posição & Colisão X
+        this.x += this.vx;
+        platforms.forEach(p => {
+            if (this.checkCollision(p)) {
+                // Detecção de Escalada em Bordas de Prédios (Ledge Grab)
+                if (this.vy > 0 && this.x + this.width >= p.x && this.x < p.x + 10 && this.y + 20 > p.y && this.y < p.y + 20) {
+                    this.isClimbing = true;
+                    this.animTimer = 0;
+                    this.x = p.x - this.width;
+                    this.y = p.y;
+                } else {
+                    if (this.vx > 0) this.x = p.x - this.width;
+                    if (this.vx < 0) this.x = p.x + p.width;
+                }
             }
+        });
 
-            dx *= this.speed;
-            dy *= this.speed;
+        // Atualização de Posição & Colisão Y
+        this.y += this.vy;
+        let wasInAir = !this.grounded;
+        this.grounded = false;
 
-            // Ativação do Dash (Tecla Espaço / Shift)
-            if ((input.keys['Space'] || input.keys['ShiftLeft']) && this.stamina >= 30 && this.dashCooldown === 0 && (dx !== 0 || dy !== 0)) {
-                this.isDashing = true;
-                this.dashTimer = 12;
-                this.dashCooldown = 30;
-                this.stamina -= 30;
-                this.invulnerable = true;
+        platforms.forEach(p => {
+            if (this.checkCollision(p)) {
+                if (this.vy > 0) {
+                    this.y = p.y - this.height;
+                    this.vy = 0;
+                    this.grounded = true;
+
+                    // Aciona Animação de Rolamento ao Cair de Alturas
+                    if (wasInAir && this.state === 'FALL') {
+                        this.rollTimer = 20;
+                    }
+                } else if (this.vy < 0) {
+                    this.y = p.y + p.height;
+                    this.vy = 0;
+                }
+            }
+        });
+
+        // Determinar Estado da Animação
+        if (!this.isClimbing) {
+            if (this.rollTimer > 0) {
+                this.rollTimer--;
+                this.state = 'ROLL';
+            } else if (this.slideTimer > 0) {
+                this.state = 'SLIDE';
+            } else if (!this.grounded) {
+                this.state = this.vy < 0 ? 'JUMP' : 'FALL';
+            } else if (Math.abs(this.vx) > 0.5) {
+                this.state = 'RUN';
+            } else {
+                this.state = 'IDLE';
             }
         }
 
-        // Colisão com Obstáculos Eixo X
-        this.x += dx;
-        for (let obj of obstacles) {
-            if (checkAABB(this, obj)) {
-                if (dx > 0) this.x = obj.x - this.width;
-                if (dx < 0) this.x = obj.x + obj.width;
-            }
-        }
-
-        // Colisão com Obstáculos Eixo Y
-        this.y += dy;
-        for (let obj of obstacles) {
-            if (checkAABB(this, obj)) {
-                if (dy > 0) this.y = obj.y - this.height;
-                if (dy < 0) this.y = obj.y + obj.height;
-            }
-        }
-
-        // Limites do Mapa
-        this.x = Math.max(0, Math.min(this.x, WORLD_WIDTH - this.width));
-        this.y = Math.max(0, Math.min(this.y, WORLD_HEIGHT - this.height));
-
-        if (dx !== 0 || dy !== 0) this.animFrame += 0.15;
-        this.updateHUD();
+        // Atualiza a Interface HUD
+        document.getElementById('anim-state').textContent = this.state;
+        document.getElementById('speed-val').textContent = `${Math.round(Math.abs(this.vx) * 3.6)} km/h`;
     }
 
-    updateHUD() {
-        document.getElementById('hp-bar').style.width = `${(this.hp / this.maxHp) * 100}%`;
-        document.getElementById('stamina-bar').style.width = `${(this.stamina / this.maxStamina) * 100}%`;
-        document.getElementById('hp-val').textContent = `${Math.ceil(this.hp)}/${this.maxHp}`;
-        document.getElementById('stamina-val').textContent = `${Math.ceil(this.stamina)}/${this.maxStamina}`;
+    checkCollision(rect) {
+        return this.x < rect.x + rect.width &&
+               this.x + this.width > rect.x &&
+               this.y < rect.y + rect.height &&
+               this.y + this.height > rect.y;
     }
 
+    // --- RENDERIZAÇÃO DAS ANIMAÇÕES PROCEDURAIS (ESQUELETO ARTICULADO) ---
     draw() {
-        const renderX = this.x - camera.x;
-        const renderY = this.y - camera.y;
+        const rx = this.x - camera.x + this.width / 2;
+        const ry = this.y - camera.y + this.height / 2;
+        const t = this.animTimer;
 
         ctx.save();
+        ctx.translate(rx, ry);
 
-        // Rastro de Ilusão durante o Dash
-        if (this.isDashing) {
-            ctx.fillStyle = 'rgba(156, 39, 176, 0.4)';
-            ctx.fillRect(renderX - 4, renderY - 4, this.width + 8, this.height + 8);
-        }
-
-        // Sombra do Personagem
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        // Sombra Dinâmica
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
         ctx.beginPath();
-        ctx.ellipse(renderX + this.width / 2, renderY + this.height - 2, 10, 5, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 22, 16, 6, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Corpo Principal (Cores Dark Fantasy)
-        ctx.fillStyle = '#2a1b4e';
-        ctx.fillRect(renderX, renderY + 8, this.width, this.height - 8);
+        ctx.strokeStyle = '#00f0ff';
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
 
-        // Capa / Túnica
-        ctx.fillStyle = '#7b1fa2';
-        ctx.fillRect(renderX + 3, renderY + 10, this.width - 6, this.height - 12);
+        let bodyTilt = 0;
+        let armL = { x: -10, y: 10 }, armR = { x: 10, y: 10 };
+        let legL = { x: -10, y: 22 }, legR = { x: 10, y: 22 };
 
-        // Cabeça
-        ctx.fillStyle = '#e0d6f6';
-        ctx.fillRect(renderX + 4, renderY, 16, 12);
+        // Cálculo dos ângulos dos membros conforme a Animação Atual
+        if (this.state === 'RUN') {
+            bodyTilt = 0.15;
+            armL = { x: Math.sin(t) * 16, y: Math.cos(t) * 8 + 5 };
+            armR = { x: -Math.sin(t) * 16, y: -Math.cos(t) * 8 + 5 };
+            legL = { x: -Math.sin(t) * 14, y: 20 + Math.max(0, Math.cos(t) * 6) };
+            legR = { x: Math.sin(t) * 14, y: 20 + Math.max(0, -Math.cos(t) * 6) };
+        } else if (this.state === 'JUMP') {
+            bodyTilt = -0.1;
+            armL = { x: -14, y: -16 }; armR = { x: 14, y: -16 };
+            legL = { x: -8, y: 14 }; legR = { x: 8, y: 22 };
+        } else if (this.state === 'FALL') {
+            bodyTilt = 0.1;
+            armL = { x: -18, y: -8 }; armR = { x: 18, y: -8 };
+            legL = { x: -12, y: 18 }; legR = { x: 4, y: 22 };
+        } else if (this.state === 'SLIDE') {
+            bodyTilt = -0.8;
+            armL = { x: -16, y: 10 }; armR = { x: 12, y: 10 };
+            legL = { x: 18, y: 8 }; legR = { x: 22, y: 12 };
+        } else if (this.state === 'ROLL') {
+            ctx.rotate(t * 3);
+            armL = { x: -8, y: 4 }; armR = { x: 8, y: 4 };
+            legL = { x: -6, y: 10 }; legR = { x: 6, y: 10 };
+        } else if (this.state === 'CLIMB') {
+            armL = { x: 6, y: -20 }; armR = { x: 10, y: -18 };
+            legL = { x: -4, y: 15 }; legR = { x: 2, y: 22 };
+        }
 
-        // Olhos / Viseira (Mudar orientação conforme direção)
-        ctx.fillStyle = '#ff1744';
-        if (this.facing === 'down') ctx.fillRect(renderX + 6, renderY + 5, 12, 3);
-        if (this.facing === 'up') ctx.fillRect(renderX + 6, renderY + 2, 12, 2);
-        if (this.facing === 'left') ctx.fillRect(renderX + 4, renderY + 5, 6, 3);
-        if (this.facing === 'right') ctx.fillRect(renderX + 14, renderY + 5, 6, 3);
+        ctx.rotate(bodyTilt);
+
+        // Tronco
+        ctx.beginPath();
+        ctx.moveTo(0, -12); ctx.lineTo(0, 8);
+        ctx.stroke();
+
+        // Cabeça com Capacete/Viseira Neon
+        ctx.fillStyle = '#ff0055';
+        ctx.beginPath();
+        ctx.arc(0, -18, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Braços
+        ctx.beginPath();
+        ctx.moveTo(0, -8); ctx.lineTo(armL.x, armL.y);
+        ctx.moveTo(0, -8); ctx.lineTo(armR.x, armR.y);
+        ctx.stroke();
+
+        // Pernas
+        ctx.beginPath();
+        ctx.moveTo(0, 8); ctx.lineTo(legL.x, legL.y);
+        ctx.moveTo(0, 8); ctx.lineTo(legR.x, legR.y);
+        ctx.stroke();
 
         ctx.restore();
     }
 }
 
-// --- COLISÕES DE CAIXA ENVOLVENTE (AABB) ---
-function checkAABB(r1, r2) {
-    return r1.x < r2.x + r2.width &&
-           r1.x + r1.width > r2.x &&
-           r1.y < r2.y + r2.height &&
-           r1.y + r1.height > r2.y;
-}
+// --- GERAÇÃO DO MAPA DE PRÉDIOS E TELHADOS (PARKOUR MAP) ---
+const platforms = [
+    { x: 0, y: 450, width: 600, height: 100 },
+    { x: 700, y: 380, width: 450, height: 170 },
+    { x: 1250, y: 300, width: 400, height: 250 },
+    { x: 1750, y: 240, width: 500, height: 300 },
+    { x: 2350, y: 380, width: 600, height: 170 }
+];
 
-// --- GERAÇÃO DA REGIÃO 1: FLORESTA DOS PERDIDOS ---
-const obstacles = [];
-const lights = []; // Fontes de luz estáticas/dinâmicas
+const runner = new ParkourRunner(100, 350);
 
-function generateForestLevel() {
-    // Paredes externas da floresta
-    obstacles.push({ x: 0, y: 0, width: WORLD_WIDTH, height: 32 });
-    obstacles.push({ x: 0, y: WORLD_HEIGHT - 32, width: WORLD_WIDTH, height: 32 });
-    obstacles.push({ x: 0, y: 0, width: 32, height: WORLD_HEIGHT });
-    obstacles.push({ x: WORLD_WIDTH - 32, y: 0, width: 32, height: WORLD_HEIGHT });
-
-    // Árvores antigas e ruínas
-    const treePositions = [
-        {x: 200, y: 150}, {x: 400, y: 180}, {x: 650, y: 120},
-        {x: 180, y: 400}, {x: 500, y: 550}, {x: 850, y: 350},
-        {x: 950, y: 600}, {x: 300, y: 700}
-    ];
-
-    treePositions.forEach(pos => {
-        obstacles.push({ x: pos.x, y: pos.y, width: 64, height: 64, type: 'tree' });
-    });
-
-    // Tochas antigas com luz mística
-    lights.push({ x: 300, y: 250, radius: 140, color: 'rgba(156, 39, 176, 0.8)' });
-    lights.push({ x: 700, y: 450, radius: 160, color: 'rgba(239, 83, 80, 0.7)' });
-    lights.push({ x: 1000, y: 200, radius: 180, color: 'rgba(0, 230, 118, 0.7)' });
-}
-
-generateForestLevel();
-
-const player = new Hero(100, 100);
-
-// --- RENDERIZAÇÃO DO AMBIENTE E SISTEMA DE LUZ ---
-function renderMap() {
-    // Fundo do Chão da Floresta (Tons de Azul e Roxo Escuro)
-    ctx.fillStyle = '#0a0514';
+// --- LOOP DE RENDERIZAÇÃO DA CIDADE ---
+function gameLoop() {
+    // Fundo Cyberpunk/Urbano
+    ctx.fillStyle = '#0b0d14';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Grid e Textura do Solo
-    ctx.strokeStyle = '#140a28';
-    ctx.lineWidth = 1;
+    // Atualização
+    runner.update(platforms);
+    camera.follow(runner);
 
-    let startCol = Math.floor(camera.x / TILE_SIZE);
-    let endCol = startCol + Math.ceil(camera.width / TILE_SIZE) + 1;
-    let startRow = Math.floor(camera.y / TILE_SIZE);
-    let endRow = startRow + Math.ceil(camera.height / TILE_SIZE) + 1;
+    // Desenhar Telhados e Prédios
+    platforms.forEach(p => {
+        const rx = p.x - camera.x;
+        const ry = p.y - camera.y;
 
-    for (let c = startCol; c < endCol; c++) {
-        for (let r = startRow; r < endRow; r++) {
-            let x = c * TILE_SIZE - camera.x;
-            let y = r * TILE_SIZE - camera.y;
-            ctx.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
-        }
-    }
+        // Corpo do Prédio
+        ctx.fillStyle = '#161a29';
+        ctx.fillRect(rx, ry, p.width, p.height);
 
-    // Desenha Obstáculos e Ruínas
-    obstacles.forEach(obs => {
-        const rx = obs.x - camera.x;
-        const ry = obs.y - camera.y;
+        // Topo com Neon (Borda de Impacto para Parkour)
+        ctx.fillStyle = '#00f0ff';
+        ctx.fillRect(rx, ry, p.width, 4);
 
-        if (obs.type === 'tree') {
-            // Tronco
-            ctx.fillStyle = '#1b002c';
-            ctx.fillRect(rx + 20, ry + 30, 24, 34);
-            // Copa em Camadas Dark Fantasy
-            ctx.fillStyle = '#311b92';
-            ctx.beginPath(); ctx.arc(rx + 32, ry + 25, 30, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#4527a0';
-            ctx.beginPath(); ctx.arc(rx + 32, ry + 20, 20, 0, Math.PI * 2); ctx.fill();
-        } else {
-            ctx.fillStyle = '#120726';
-            ctx.fillRect(rx, ry, obs.width, obs.height);
-            ctx.strokeStyle = '#311b92';
-            ctx.strokeRect(rx, ry, obs.width, obs.height);
+        // Linhas de Janelas/Grade de Prédio
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+        for (let jx = rx + 20; jx < rx + p.width - 20; jx += 40) {
+            for (let jy = ry + 20; jy < ry + p.height - 20; jy += 40) {
+                ctx.fillRect(jx, jy, 20, 20);
+            }
         }
     });
-}
 
-// --- ENGINE DE ILUMINAÇÃO DINÂMICA ---
-function renderLighting() {
-    // 1. Limpa o canvas secundário com a escuridão da noite/eclipse
-    lightCtx.fillStyle = 'rgba(4, 2, 10, 0.92)';
-    lightCtx.fillRect(0, 0, lightCanvas.width, lightCanvas.height);
-
-    lightCtx.globalCompositeOperation = 'destination-out';
-
-    // 2. Luz Própria do Protagonista (A Espada Consciente)
-    const playerLightX = (player.x + player.width / 2) - camera.x;
-    const playerLightY = (player.y + player.height / 2) - camera.y;
-
-    let pGrad = lightCtx.createRadialGradient(playerLightX, playerLightY, 10, playerLightX, playerLightY, 120);
-    pGrad.addColorStop(0, 'rgba(0, 0, 0, 1)');
-    pGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-    lightCtx.fillStyle = pGrad;
-    lightCtx.beginPath();
-    lightCtx.arc(playerLightX, playerLightY, 120, 0, Math.PI * 2);
-    lightCtx.fill();
-
-    // 3. Luzes dos Objetos da Floresta
-    lights.forEach(l => {
-        const lx = l.x - camera.x;
-        const ly = l.y - camera.y;
-
-        let grad = lightCtx.createRadialGradient(lx, ly, 5, lx, ly, l.radius);
-        grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
-        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-        lightCtx.fillStyle = grad;
-        lightCtx.beginPath();
-        lightCtx.arc(lx, ly, l.radius, 0, Math.PI * 2);
-        lightCtx.fill();
-    });
-
-    lightCtx.globalCompositeOperation = 'source-over';
-
-    // 4. Aplica a camada de sombra por cima do canvas principal
-    ctx.drawImage(lightCanvas, 0, 0);
-}
-
-// --- GAME LOOP PRINCIPAL ---
-let isGameRunning = false;
-
-function gameLoop() {
-    if (isGameRunning) {
-        // Atualizações
-        player.update(obstacles);
-        camera.follow(player);
-
-        // Desenho
-        renderMap();
-        player.draw();
-        renderLighting();
-    }
+    // Desenhar Protagonista
+    runner.draw();
 
     requestAnimationFrame(gameLoop);
 }
 
-// --- CONTROLE DAS TELAS & MENU ---
-function startGame() {
-    document.getElementById('main-menu').style.display = 'none';
-    document.getElementById('hud-layer').style.display = 'flex';
-    isGameRunning = true;
-
-    // Diálogo Introdutório
-    setTimeout(() => {
-        showDialogue("ESPRITO DA ESPADA", "Você despertou... 700 anos se passaram desde que as cinzas cobriram este mundo. Lembre-se de quem você é.");
-    }, 1000);
-}
-
-function showDialogue(speaker, text) {
-    const box = document.getElementById('dialogue-box');
-    document.getElementById('speaker-name').textContent = speaker;
-    document.getElementById('dialogue-text').textContent = text;
-    box.style.display = 'flex';
-
-    setTimeout(() => {
-        box.style.display = 'none';
-    }, 6000);
-}
-
-function showCredits() {
-    alert("ECLIPSE — O ÚLTIMO MUNDO\nDesenvolvido com HTML5 Canvas e JavaScript Puro.");
-}
-
-// Inicia o Loop da Engine
 gameLoop();
 
