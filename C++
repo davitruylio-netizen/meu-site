@@ -1,2 +1,2 @@
-
-git rm -r C++
+git add -A
+git commit -m "Remove C++"
