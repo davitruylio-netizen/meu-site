@@ -30,7 +30,45 @@
             image-rendering: pixelated;
         }
 
-        /* --- HUD DE ENERGIA E HORA --- */
+        /* --- MENU INICIAL IDENTICO AO ORIGINAL --- */
+        #menu-screen {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 100; display: flex;
+            flex-direction: column; justify-content: space-between;
+            padding: 40px 60px; pointer-events: none;
+        }
+
+        .menu-title-group {
+            font-size: 2.4rem; font-weight: bold;
+            line-height: 1.1; color: #fff;
+            text-shadow: 3px 3px 0px #000;
+            letter-spacing: 2px;
+            pointer-events: auto;
+        }
+
+        .menu-options-list {
+            display: flex; flex-direction: column;
+            gap: 14px; margin-top: 25px;
+            pointer-events: auto;
+        }
+
+        .menu-item {
+            font-size: 1.5rem; color: #aaa;
+            cursor: pointer; transition: all 0.1s;
+            width: max-content; font-weight: bold;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .menu-item:hover { color: #fff; text-shadow: 0 0 10px #fff; }
+        .menu-item:hover::before { content: '>>'; color: #fff; }
+
+        .copyright-text {
+            font-size: 11px; color: #555;
+            align-self: flex-end; text-align: right;
+            pointer-events: auto;
+        }
+
+        /* --- HUD DE JOGO --- */
         .hud-overlay {
             position: absolute; bottom: 20px; left: 20px;
             z-index: 10; pointer-events: none; display: none;
@@ -45,7 +83,6 @@
             text-shadow: 2px 2px #000;
         }
 
-        /* --- BOTÃO DO MONITOR DE CÂMERAS --- */
         #camera-flip-btn {
             position: absolute; bottom: 8px; left: 50%;
             transform: translateX(-50%);
@@ -60,7 +97,6 @@
         }
         #camera-flip-btn:hover { background: rgba(255, 255, 255, 0.35); border-color: #fff; }
 
-        /* --- PAINEL DAS CÂMERAS (MAPA) --- */
         #cam-map-container {
             position: absolute; bottom: 55px; right: 20px;
             width: 290px; height: 230px;
@@ -91,42 +127,6 @@
         #btn-cam7  { top: 55px; left: 220px; }
         #btn-cam6  { top: 115px; left: 220px; }
 
-        /* MENU INICIAL IDENTICO AO ORIGINAL */
-        #menu-screen {
-            position: absolute; top: 0; left: 0;
-            width: 100%; height: 100%;
-            z-index: 100; display: flex;
-            flex-direction: column; justify-content: space-between;
-            padding: 40px 60px; pointer-events: auto;
-        }
-
-        .menu-title-group {
-            font-size: 2.2rem; font-weight: bold;
-            line-height: 1.1; color: #fff;
-            text-shadow: 2px 2px 0px #000;
-            letter-spacing: 2px;
-        }
-
-        .menu-options-list {
-            display: flex; flex-direction: column;
-            gap: 12px; margin-top: 20px;
-        }
-
-        .menu-item {
-            font-size: 1.4rem; color: #aaa;
-            cursor: pointer; transition: all 0.1s;
-            width: max-content; font-weight: bold;
-            display: flex; align-items: center; gap: 10px;
-        }
-        .menu-item:hover { color: #fff; text-shadow: 0 0 8px #fff; }
-        .menu-item:hover::before { content: '>>'; color: #fff; }
-
-        .copyright-text {
-            font-size: 11px; color: #555;
-            align-self: flex-end; text-align: right;
-        }
-
-        /* TELA GAME OVER E WIN */
         #game-over-screen, #win-screen {
             position: absolute; top: 0; left: 0;
             width: 100%; height: 100%;
@@ -141,7 +141,7 @@
     <div id="game-wrapper">
         <canvas id="gameCanvas" width="1000" height="562"></canvas>
 
-        <!-- MENU ESTILO FNAF 1 ORIGINAL -->
+        <!-- MENU PRINCIPAL -->
         <div id="menu-screen">
             <div>
                 <div class="menu-title-group">
@@ -203,4 +203,3 @@
     <script src="script.js"></script>
 </body>
 </html>
-
