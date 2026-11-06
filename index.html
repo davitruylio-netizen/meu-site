@@ -3,203 +3,269 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Game Architect - 3D Engine</title>
+    <title>HUB DOS AMIGOS - Plataforma Gamer & Produtividade</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: 'Segoe UI', sans-serif; }
-        body, html { width: 100%; height: 100%; overflow: hidden; background-color: #05050a; color: #fff; }
-        #canvas-container { width: 100vw; height: 100vh; display: block; }
-        
-        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(5, 5, 10, 0.85); backdrop-filter: blur(10px); z-index: 10; }
-        .hidden { display: none !important; }
-        .menu-card { background: rgba(20, 24, 33, 0.95); border: 1px solid rgba(0, 230, 153, 0.3); border-radius: 16px; padding: 40px; width: 90%; max-width: 550px; text-align: center; box-shadow: 0 0 30px rgba(0, 230, 153, 0.15); }
-        .menu-card h1 { font-size: 2.5rem; margin-bottom: 10px; background: linear-gradient(135deg, #00e699, #00b3ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        
-        .btn { background: linear-gradient(135deg, #00e699, #00b3ff); color: #0d0f12; border: none; padding: 14px 28px; font-size: 1rem; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; margin: 8px; }
-        .btn:hover { transform: scale(1.05); }
+        :root {
+            --bg-dark: #0d0f17;
+            --bg-card: #181b26;
+            --bg-tertiary: #222636;
+            --accent-cyan: #06b6d4;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --text-primary: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --gradient-main: linear-gradient(135deg, #3b82f6, #06b6d4);
+        }
 
-        #hud { position: absolute; top: 20px; left: 20px; pointer-events: none; z-index: 5; }
-        .hud-card { background: rgba(15, 18, 25, 0.8); border: 1px solid rgba(255, 255, 255, 0.1); padding: 15px 25px; border-radius: 8px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { background: var(--bg-dark); color: var(--text-primary); min-height: 100vh; padding: 1.5rem; }
+
+        /* Topbar & Perfil */
+        .topbar {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--bg-card); padding: 1.25rem 2rem; border-radius: 14px;
+            border: 1px solid var(--border-color); margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;
+        }
+        .brand { display: flex; align-items: center; gap: 1rem; }
+        .brand h1 { font-size: 1.4rem; color: var(--accent-cyan); letter-spacing: 1px; }
+
+        .profile-badge {
+            display: flex; align-items: center; gap: 1rem; background: var(--bg-tertiary);
+            padding: 0.5rem 1.25rem; border-radius: 30px; border: 1px solid var(--border-color);
+        }
+        .level-tag { background: var(--gradient-main); padding: 0.2rem 0.75rem; border-radius: 12px; font-weight: bold; font-size: 0.85rem; }
+
+        /* Dashboard & Grid Layout */
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+        
+        .card {
+            background: var(--bg-card); border-radius: 14px; border: 1px solid var(--border-color);
+            padding: 1.5rem; transition: transform 0.2s, border-color 0.2s; display: flex; flex-direction: column;
+        }
+        .card:hover { transform: translateY(-4px); border-color: var(--accent-cyan); }
+        .card-icon { font-size: 2rem; color: var(--accent-cyan); margin-bottom: 1rem; }
+        .card h3 { margin-bottom: 0.5rem; font-size: 1.15rem; }
+        .card p { color: var(--text-muted); font-size: 0.88rem; margin-bottom: 1.25rem; flex-grow: 1; }
+
+        .btn {
+            background: var(--gradient-main); color: white; border: none; padding: 0.65rem 1.25rem;
+            border-radius: 8px; font-weight: bold; cursor: pointer; text-align: center; width: 100%; transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.9; }
+
+        /* Modal dos Jogos */
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(10, 12, 18, 0.9); backdrop-filter: blur(8px);
+            align-items: center; justify-content: center; z-index: 1000;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--bg-card); padding: 2rem; border-radius: 16px;
+            border: 1px solid var(--border-color); width: 100%; max-width: 480px; text-align: center;
+        }
+
+        .game-opt-btn {
+            background: var(--bg-tertiary); border: 1px solid var(--border-color); color: white;
+            padding: 0.8rem; margin: 0.4rem 0; width: 100%; border-radius: 8px; cursor: pointer;
+            font-size: 1rem; transition: background 0.2s;
+        }
+        .game-opt-btn:hover { background: var(--accent-purple); }
+
+        .tag-conquista {
+            display: inline-block; background: rgba(6, 182, 212, 0.15); color: var(--accent-cyan);
+            border: 1px solid var(--accent-cyan); padding: 0.3rem 0.6rem; border-radius: 6px;
+            font-size: 0.75rem; margin: 0.2rem;
+        }
     </style>
-    <!-- Importando Three.js de forma simples -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-    <div id="hud" class="hidden">
-        <div class="hud-card">
-            <h2 id="hud-title" style="color: #00e699;">Modo 3D</h2>
-            <p id="hud-stats">Conectando ao servidor Java...</p>
-        </div>
-    </div>
-
-    <div id="main-menu" class="overlay">
-        <div class="menu-card">
-            <h1>AI Architect 3D</h1>
-            <p>Motor Tridimensional Procedural (Three.js + Java)</p>
-            <div style="margin-top: 25px;">
-                <button class="btn" onclick="init3DGame('SOLO')">Iniciar Solo 3D</button>
-                <button class="btn" onclick="init3DGame('MULTIPLAYER')">Multiplayer 3D</button>
+    <!-- Header Topbar -->
+    <header class="topbar">
+        <div class="brand">
+            <i class="fa-solid fa-gamepad" style="font-size: 1.8rem; color: var(--accent-cyan);"></i>
+            <div>
+                <h1>HUB DOS AMIGOS</h1>
+                <small style="color: var(--text-muted)">Servidor Java Online</small>
             </div>
         </div>
+        <div class="profile-badge">
+            <span id="user-name">Carregando...</span>
+            <span class="level-tag" id="user-level">Nv. 1</span>
+            <span style="color: var(--accent-cyan); font-weight: bold;" id="user-xp">0 XP</span>
+        </div>
+    </header>
+
+    <!-- Main Grid -->
+    <main class="dashboard-grid">
+        <!-- Card 1: Jokenpo -->
+        <div class="card">
+            <i class="fa-solid fa-hand-back-fist card-icon"></i>
+            <h3>Pedra, Papel e Tesoura</h3>
+            <p>Dispute rodadas contra o bot gerenciado diretamente no Java.</p>
+            <button class="btn" onclick="abrirJogo('jokenpo')">Jogar (+35 XP)</button>
+        </div>
+
+        <!-- Card 2: Math -->
+        <div class="card">
+            <i class="fa-solid fa-calculator card-icon"></i>
+            <h3>Desafio de Matemática</h3>
+            <p>Resolva operações aritméticas geradas em tempo real no backend.</p>
+            <button class="btn" onclick="abrirJogo('math')">Jogar (+25 XP)</button>
+        </div>
+
+        <!-- Card 3: Adivinhação -->
+        <div class="card">
+            <i class="fa-solid fa-hashtag card-icon"></i>
+            <h3>Adivinhe o Número</h3>
+            <p>Tente descobrir o número secreto de 1 a 100 sorteado no servidor Java.</p>
+            <button class="btn" onclick="abrirJogo('guess')">Jogar (+40 XP)</button>
+        </div>
+
+        <!-- Card 4: Painel de Progresso -->
+        <div class="card" style="grid-column: span 1;">
+            <i class="fa-solid fa-trophy card-icon" style="color: var(--accent-purple);"></i>
+            <h3>Conquistas & Progresso</h3>
+            <div id="conquistas-container" style="margin-bottom: 1rem;">
+                <span class="tag-conquista">Nenhuma conquista ainda</span>
+            </div>
+            <h4 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted);">Histórico Recente:</h4>
+            <ul id="historico-lista" style="list-style: none; font-size: 0.8rem; color: var(--text-muted);">
+                <li>Sem partidas recentes.</li>
+            </ul>
+        </div>
+    </main>
+
+    <!-- Modal do Jogo -->
+    <div class="modal" id="game-modal">
+        <div class="modal-content" id="modal-body">
+            <!-- Conteúdo injetado via JS -->
+        </div>
     </div>
 
-    <div id="canvas-container"></div>
-
     <script>
-        let scene, camera, renderer;
-        let players3D = {}, enemies3D = {}, bullets3D = [], obstacles3D = [];
-        let socket = null, myPlayerId = null;
-        const keys = { w: false, a: false, s: false, d: false, shoot: false, angle: 0 };
+        const API = "http://localhost:8080/api";
+        let targetNum = 0;
+        let mathAns = 0;
 
-        function initScene() {
-            // 1. Configurar Cena 3D
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x05050a);
-            scene.fog = new THREE.FogExp2(0x05050a, 0.015);
+        // Atualizar estado completo do usuário
+        async function carregarPerfil() {
+            try {
+                const res = await fetch(`${API}/perfil`);
+                const data = await res.json();
 
-            // 2. Câmera (Visão Isométrica 3D / 3ª Pessoa)
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 35, 30);
-            camera.lookAt(0, 0, 0);
+                document.getElementById('user-name').innerText = data.nome;
+                document.getElementById('user-level').innerText = `Nv. ${data.nivel}`;
+                document.getElementById('user-xp').innerText = `${data.xp} XP`;
 
-            // 3. Renderizador WebGL
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.shadowMap.enabled = true;
-            document.getElementById('canvas-container').appendChild(renderer.domElement);
-
-            // 4. Luzes 3D
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-            scene.add(ambientLight);
-
-            const dirLight = new THREE.DirectionalLight(0x00e699, 0.8);
-            dirLight.position.set(20, 40, 20);
-            dirLight.castShadow = true;
-            scene.add(dirLight);
-
-            // 5. Chão / Terreno 3D
-            const gridHelper = new THREE.GridHelper(200, 50, 0x00e699, 0x222233);
-            scene.add(gridHelper);
-
-            window.addEventListener('resize', onWindowResize);
-            setupInputs();
-        }
-
-        function init3DGame(mode) {
-            initScene();
-            document.getElementById('main-menu').classList.add('hidden');
-            document.getElementById('hud').classList.remove('hidden');
-
-            // Conectar ao Backend Java
-            socket = new WebSocket('ws://localhost:8080/ws/game');
-
-            socket.onopen = () => {
-                socket.send(JSON.stringify({ action: 'JOIN', mode: mode }));
-            };
-
-            socket.onmessage = (event) => {
-                const msg = JSON.parse(event.data);
-                if (msg.type === 'INIT') {
-                    myPlayerId = msg.playerId;
-                    buildObstacles3D(msg.obstacles || []);
-                } else if (msg.type === 'UPDATE') {
-                    update3DEntities(msg);
-                }
-            };
-
-            // Loop de Envio de Input ao Java
-            setInterval(() => {
-                if (socket && socket.readyState === WebSocket.OPEN) {
-                    socket.send(JSON.stringify({ action: 'INPUT', input: keys }));
-                }
-            }, 1000 / 60);
-
-            animate();
-        }
-
-        function buildObstacles3D(obstacles) {
-            const mat = new THREE.MeshStandardMaterial({ color: 0x1a1a3a, roughness: 0.4 });
-            obstacles.forEach(obs => {
-                const geo = new THREE.BoxGeometry(obs.w / 10, 6, obs.h / 10);
-                const mesh = new THREE.Mesh(geo, mat);
-                mesh.position.set((obs.x - 1200) / 10, 3, (obs.y - 900) / 10);
-                mesh.castShadow = true;
-                mesh.receiveShadow = true;
-                scene.add(mesh);
-            });
-        }
-
-        function update3DEntities(state) {
-            // Sincronizar Jogadores (Esferas/Modelos 3D)
-            state.players.forEach(p => {
-                let mesh = players3D[p.id];
-                const targetX = (p.x - 1200) / 10;
-                const targetZ = (p.y - 900) / 10;
-
-                if (!mesh) {
-                    const geo = new THREE.CapsuleGeometry(1, 2, 8, 16);
-                    const mat = new THREE.MeshStandardMaterial({ color: p.id === myPlayerId ? 0x00f3ff : 0xff0055 });
-                    mesh = new THREE.Mesh(geo, mat);
-                    mesh.castShadow = true;
-                    scene.add(mesh);
-                    players3D[p.id] = mesh;
+                // Conquistas
+                const conquistasDiv = document.getElementById('conquistas-container');
+                if (data.conquistas.length > 0) {
+                    conquistasDiv.innerHTML = data.conquistas.map(c => `<span class="tag-conquista">🏆 ${c}</span>`).join('');
                 }
 
-                mesh.position.set(targetX, 1.5, targetZ);
-
-                // Câmera segue o jogador local em 3D
-                if (p.id === myPlayerId) {
-                    camera.position.set(targetX, targetX + 25, targetZ + 25);
-                    camera.lookAt(targetX, 0, targetZ);
-                    document.getElementById('hud-stats').innerText = `Abates: ${p.kills || 0} | HP: ${p.hp}%`;
+                // Histórico
+                const histUl = document.getElementById('historico-lista');
+                if (data.historico.length > 0) {
+                    histUl.innerHTML = data.historico.slice(0, 4).map(h => 
+                        `<li style="margin-bottom: 4px;">🎮 <strong>${h.jogo}</strong> (+${h.pontos} XP)</li>`
+                    ).join('');
                 }
-            });
-
-            // Sincronizar Inimigos 3D
-            state.enemies.forEach(e => {
-                let mesh = enemies3D[e.id];
-                const ex = (e.x - 1200) / 10;
-                const ez = (e.y - 900) / 10;
-
-                if (!mesh) {
-                    const geo = new THREE.SphereGeometry(1.2, 16, 16);
-                    const mat = new THREE.MeshStandardMaterial({ color: 0xff0055, emissive: 0x330011 });
-                    mesh = new THREE.Mesh(geo, mat);
-                    mesh.castShadow = true;
-                    scene.add(mesh);
-                    enemies3D[e.id] = mesh;
-                }
-                mesh.position.set(ex, 1.2, ez);
-            });
+            } catch (e) {
+                console.error("Erro ao conectar ao Java:", e);
+            }
         }
 
-        function setupInputs() {
-            window.addEventListener('keydown', e => {
-                if (e.code === 'KeyW') keys.w = true;
-                if (e.code === 'KeyS') keys.s = true;
-                if (e.code === 'KeyA') keys.a = true;
-                if (e.code === 'KeyD') keys.d = true;
-            });
-            window.addEventListener('keyup', e => {
-                if (e.code === 'KeyW') keys.w = false;
-                if (e.code === 'KeyS') keys.s = false;
-                if (e.code === 'KeyA') keys.a = false;
-                if (e.code === 'KeyD') keys.d = false;
-            });
-            window.addEventListener('mousedown', () => keys.shoot = true);
-            window.addEventListener('mouseup', () => keys.shoot = false);
+        function fecharModal() {
+            document.getElementById('game-modal').classList.remove('active');
         }
 
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+        async function abrirJogo(tipo) {
+            const modal = document.getElementById('game-modal');
+            const body = document.getElementById('modal-body');
+            modal.classList.add('active');
+
+            if (tipo === 'jokenpo') {
+                body.innerHTML = `
+                    <h3>Pedra, Papel e Tesoura</h3>
+                    <p style="color:var(--text-muted); margin-bottom:1rem;">Escolha sua jogada:</p>
+                    <button class="game-opt-btn" onclick="executarJokenpo('Pedra')">✊ Pedra</button>
+                    <button class="game-opt-btn" onclick="executarJokenpo('Papel')">✋ Papel</button>
+                    <button class="game-opt-btn" onclick="executarJokenpo('Tesoura')">✌️ Tesoura</button>
+                    <div id="jokenpo-res" style="margin-top:1rem; font-weight:bold;"></div>
+                    <button class="btn" style="margin-top:1rem; background:var(--bg-tertiary);" onclick="fecharModal()">Sair</button>
+                `;
+            } else if (tipo === 'math') {
+                const res = await fetch(`${API}/jogos/math/gerar`);
+                const data = await res.json();
+                mathAns = data.resposta;
+
+                body.innerHTML = `
+                    <h3>Desafio de Matemática</h3>
+                    <h2 style="color:var(--accent-cyan); margin: 1rem 0;">${data.num1} + ${data.num2} = ?</h2>
+                    <input type="number" id="math-input" style="width:100%; padding:0.6rem; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-tertiary); color:white; text-align:center; font-size:1.2rem; margin-bottom:1rem;">
+                    <button class="btn" onclick="validarMath()">Confirmar</button>
+                    <div id="math-res" style="margin-top:1rem; font-weight:bold;"></div>
+                    <button class="btn" style="margin-top:1rem; background:var(--bg-tertiary);" onclick="fecharModal()">Sair</button>
+                `;
+            } else if (tipo === 'guess') {
+                const res = await fetch(`${API}/jogos/guess/gerar`);
+                const data = await res.json();
+                targetNum = data.target;
+
+                body.innerHTML = `
+                    <h3>Adivinhe o Número (1 a 100)</h3>
+                    <p style="color:var(--text-muted); margin-bottom:1rem;">O Java sorteou um número!</p>
+                    <input type="number" id="guess-input" style="width:100%; padding:0.6rem; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-tertiary); color:white; text-align:center; font-size:1.2rem; margin-bottom:1rem;" min="1" max="100">
+                    <button class="btn" onclick="validarGuess()">Chutar</button>
+                    <div id="guess-res" style="margin-top:1rem; font-weight:bold;"></div>
+                    <button class="btn" style="margin-top:1rem; background:var(--bg-tertiary);" onclick="fecharModal()">Sair</button>
+                `;
+            }
         }
 
-        function animate() {
-            requestAnimationFrame(animate);
-            renderer.render(scene, camera);
+        async function executarJokenpo(escolha) {
+            const res = await fetch(`${API}/jogos/jokenpo?escolha=${escolha}`, { method: 'POST' });
+            const data = await res.json();
+            document.getElementById('jokenpo-res').innerHTML = `
+                Você: ${data.jogador} vs Bot: ${data.bot}<br>
+                <span style="color:var(--accent-cyan)">${data.resultado} (+${data.xpGanha} XP)</span>
+            `;
+            carregarPerfil();
         }
+
+        async function validarMath() {
+            const val = parseInt(document.getElementById('math-input').value);
+            const resDiv = document.getElementById('math-res');
+            if (val === mathAns) {
+                resDiv.innerHTML = `<span style="color:#10b981">Resposta Correta! (+25 XP)</span>`;
+                await fetch(`${API}/perfil/add-xp?pontos=25&jogo=Desafio+de+Matematica`, { method: 'POST' });
+                carregarPerfil();
+                setTimeout(() => abrirJogo('math'), 1000);
+            } else {
+                resDiv.innerHTML = `<span style="color:#ef4444">Incorreto! Tente novamente.</span>`;
+            }
+        }
+
+        async function validarGuess() {
+            const val = parseInt(document.getElementById('guess-input').value);
+            const resDiv = document.getElementById('guess-res');
+            if (val === targetNum) {
+                resDiv.innerHTML = `<span style="color:#10b981">Você acertou! O número era ${targetNum}. (+40 XP)</span>`;
+                await fetch(`${API}/perfil/add-xp?pontos=40&jogo=Adivinhe+o+Numero`, { method: 'POST' });
+                carregarPerfil();
+            } else if (val < targetNum) {
+                resDiv.innerHTML = `Tente um número MAIOR! ⬆️`;
+            } else {
+                resDiv.innerHTML = `Tente um número MENOR! ⬇️`;
+            }
+        }
+
+        // Inicializar aplicação
+        carregarPerfil();
     </script>
 </body>
 </html>
