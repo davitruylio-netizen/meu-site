@@ -1,16 +1,27 @@
 // =============================================================================
-// FIVE NIGHTS AT FREDDY'S — ULTRA DETAIL GAME ENGINE
+// FIVE NIGHTS AT FREDDY'S — ENGINE COMPLETA E MENU FIEL
 // =============================================================================
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
-// --- SINTETIZADOR DE ÁUDIO WEB (SEM ARQUIVOS EXTERNOS) ---
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+// Contexto de Áudio
+let audioCtx = null;
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+}
 
 function playSound(type) {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    initAudio();
+    if (!audioCtx) return;
+
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.connect(gain);
@@ -39,7 +50,8 @@ function playSound(type) {
     }
 }
 
-// --- ESTADO DO JOGO ---
+// ESTADOS DE JOGO
+let inMenu = true;
 let gameRunning = false;
 let monitorOpen = false;
 let currentCam = '1A';
@@ -57,41 +69,53 @@ let power = 100;
 let hour = 0;
 let nightTimer = 0;
 
-// --- IA E POSIÇÕES DOS ANIMATRÔNICOS ---
+// ANIMALTRÔNICOS
 const animatronics = {
     bonnie: { location: '1A', aiLevel: 4, timer: 0 },
     chica:  { location: '1A', aiLevel: 3, timer: 0 },
-    foxy:   { location: '1C', stage: 0, aiLevel: 3, timer: 0 }, // Stages: 0 (escondido), 1 (espiando), 2 (fora da cortina), 3 (correndo)
+    foxy:   { location: '1C', stage: 0, aiLevel: 3, timer: 0 },
     freddy: { location: '1A', aiLevel: 2, timer: 0 }
 };
 
-// Movimento do Mouse
+// CONTROLE DE MOUSE
 const wrapper = document.getElementById('game-wrapper');
 wrapper.addEventListener('mousemove', e => {
     const rect = wrapper.getBoundingClientRect();
     mouseX = e.clientX - rect.left;
 });
 
-// Cliques no Escritório
+// CLIQUE DE ESCRITÓRIO
 canvas.addEventListener('click', e => {
-    if (monitorOpen || !gameRunning) return;
+    if (inMenu || monitorOpen || !gameRunning) return;
 
     const rect = canvas.getBoundingClientRect();
     const clickX = e.clientX - rect.left + (officeX * 0.8);
     const clickY = e.clientY - rect.top;
 
-    // Botões Porta e Luz Esquerda
     if (clickX > 80 && clickX < 140) {
         if (clickY > 180 && clickY < 230) { leftDoor = !leftDoor; playSound('door'); }
         if (clickY > 240 && clickY < 290) { leftLight = !leftLight; playSound('light'); }
     }
 
-    // Botões Porta e Luz Direita
     if (clickX > 1050 && clickX < 1110) {
         if (clickY > 180 && clickY < 230) { rightDoor = !rightDoor; playSound('door'); }
         if (clickY > 240 && clickY < 290) { rightLight = !rightLight; playSound('light'); }
     }
 });
+
+// EVENTOS DE BOTÃO DE MENU
+document.getElementById('btn-newgame').onclick = startNight;
+document.getElementById('btn-continue').onclick = startNight;
+
+function startNight() {
+    initAudio();
+    inMenu = false;
+    document.getElementById('menu-screen').style.display = 'none';
+    document.getElementById('hud-overlay').style.display = 'flex';
+    document.getElementById('night-time').style.display = 'block';
+    document.getElementById('camera-flip-btn').style.display = 'flex';
+    gameRunning = true;
+}
 
 function toggleMonitor() {
     if (!gameRunning) return;
@@ -107,9 +131,8 @@ function selectCam(cam) {
     playSound('light');
 }
 
-// --- LÓGICA DE MOVIMENTAÇÃO DOS ANIMATRÔNICOS ---
+// IA
 function updateAI() {
-    // BONNIE
     animatronics.bonnie.timer++;
     if (animatronics.bonnie.timer > 220) {
         animatronics.bonnie.timer = 0;
@@ -125,7 +148,6 @@ function updateAI() {
         }
     }
 
-    // CHICA
     animatronics.chica.timer++;
     if (animatronics.chica.timer > 260) {
         animatronics.chica.timer = 0;
@@ -141,7 +163,6 @@ function updateAI() {
         }
     }
 
-    // FOXY (PIRATE COVE)
     animatronics.foxy.timer++;
     if (animatronics.foxy.timer > 320 && !monitorOpen) {
         animatronics.foxy.timer = 0;
@@ -149,12 +170,11 @@ function updateAI() {
             if (animatronics.foxy.stage < 3) {
                 animatronics.foxy.stage++;
             } else {
-                // Foxy corre até o escritório!
                 if (!leftDoor) {
                     triggerJumpscare('FOXY');
                 } else {
                     animatronics.foxy.stage = 0;
-                    power -= 6; // Perde energia ao bater na porta
+                    power -= 6;
                 }
             }
         }
@@ -164,6 +184,7 @@ function updateAI() {
 function triggerJumpscare(who) {
     gameRunning = false;
     document.getElementById('cam-map-container').style.display = 'none';
+    document.getElementById('camera-flip-btn').style.display = 'none';
     playSound('jumpscare');
 
     let frame = 0;
@@ -171,30 +192,28 @@ function triggerJumpscare(who) {
         ctx.fillStyle = frame % 2 === 0 ? '#000' : '#400';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Renderização dos Animatrônicos em Jumpscare
         ctx.save();
-        ctx.translate(600, 280);
+        ctx.translate(500, 280);
         ctx.scale(1 + frame * 0.05, 1 + frame * 0.05);
 
         if (who === 'BONNIE') ctx.fillStyle = '#3f51b5';
         else if (who === 'CHICA') ctx.fillStyle = '#fbc02d';
         else if (who === 'FOXY') ctx.fillStyle = '#d84315';
-        else ctx.fillStyle = '#6d4c41'; // FREDDY
+        else ctx.fillStyle = '#6d4c41';
 
         ctx.beginPath();
         ctx.arc(0, 0, 160, 0, Math.PI * 2);
         ctx.fill();
 
-        // Olhos e Boca Assustadores
         ctx.fillStyle = '#000';
         ctx.fillRect(-60, -40, 40, 40); ctx.fillRect(20, -40, 40, 40);
         ctx.fillStyle = '#ff0000';
         ctx.fillRect(-45, -25, 12, 12); ctx.fillRect(35, -25, 12, 12);
 
         ctx.fillStyle = '#000';
-        ctx.fillRect(-50, 40, 100, 50); // Boca
+        ctx.fillRect(-50, 40, 100, 50);
         ctx.fillStyle = '#fff';
-        ctx.fillRect(-40, 45, 15, 15); ctx.fillRect(-15, 45, 15, 15); ctx.fillRect(10, 45, 15, 15); // Dentes
+        ctx.fillRect(-40, 45, 15, 15); ctx.fillRect(-15, 45, 15, 15); ctx.fillRect(10, 45, 15, 15);
 
         ctx.restore();
 
@@ -206,8 +225,34 @@ function triggerJumpscare(who) {
     }, 50);
 }
 
-// --- RENDERIZAÇÃO DE GRÁFICOS DO ESCRITÓRIO E CÂMERAS ---
+// RENDERIZADOR DE MENU E JOGO
 function render() {
+    if (inMenu) {
+        // --- RENDERIZAÇÃO DO MENU INICIAL ORIGINAL ---
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Desenhar Freddy no Menu com Efeito Flicker
+        const isFlicker = Math.random() < 0.08;
+        ctx.fillStyle = '#5d4037';
+        ctx.beginPath();
+        ctx.arc(720, 300, 190, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Olho do Freddy (Flicker)
+        ctx.fillStyle = isFlicker ? '#ff0000' : '#fff';
+        ctx.beginPath();
+        ctx.arc(670, 260, isFlicker ? 14 : 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Estática CRT no Menu
+        for (let i = 0; i < 400; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.4)';
+            ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 4, 2);
+        }
+        return;
+    }
+
     if (!monitorOpen) {
         if (mouseX < 250 && officeX > 0) officeX -= 7;
         if (mouseX > 750 && officeX < 240) officeX += 7;
@@ -217,16 +262,15 @@ function render() {
     ctx.translate(-officeX, 0);
 
     if (!monitorOpen) {
-        // --- ESCRITÓRIO 3D ---
+        // ESCRITÓRIO
         ctx.fillStyle = '#0f1115';
         ctx.fillRect(0, 0, 1240, 562);
 
-        // Luzes e Animatrônicos nas Portas
         if (leftLight) {
             ctx.fillStyle = animatronics.bonnie.location === '2B' ? '#282b5c' : '#eef';
             ctx.fillRect(60, 80, 120, 360);
             if (animatronics.bonnie.location === '2B') {
-                ctx.fillStyle = '#3f51b5'; ctx.fillRect(90, 180, 60, 160); // Bonnie na Porta
+                ctx.fillStyle = '#3f51b5'; ctx.fillRect(90, 180, 60, 160);
                 ctx.fillStyle = '#ff0000'; ctx.fillRect(105, 200, 8, 8); ctx.fillRect(125, 200, 8, 8);
             }
         } else {
@@ -237,14 +281,14 @@ function render() {
             ctx.fillStyle = animatronics.chica.location === '4B' ? '#5c5428' : '#eef';
             ctx.fillRect(1060, 80, 120, 360);
             if (animatronics.chica.location === '4B') {
-                ctx.fillStyle = '#fbc02d'; ctx.fillRect(1090, 180, 60, 160); // Chica na Porta
+                ctx.fillStyle = '#fbc02d'; ctx.fillRect(1090, 180, 60, 160);
                 ctx.fillStyle = '#ff0000'; ctx.fillRect(1105, 200, 8, 8); ctx.fillRect(1125, 200, 8, 8);
             }
         } else {
             ctx.fillStyle = '#030305'; ctx.fillRect(1060, 80, 120, 360);
         }
 
-        // Portas de Metal
+        // Portas
         ctx.fillStyle = leftDoor ? '#2a2a2a' : '#121212';
         ctx.fillRect(60, leftDoor ? 80 : -280, 120, 360);
         ctx.strokeStyle = '#444'; ctx.strokeRect(60, leftDoor ? 80 : -280, 120, 360);
@@ -253,17 +297,16 @@ function render() {
         ctx.fillRect(1060, rightDoor ? 80 : -280, 120, 360);
         ctx.strokeStyle = '#444'; ctx.strokeRect(1060, rightDoor ? 80 : -280, 120, 360);
 
-        // Botões de Porta/Luz
+        // Botões
         ctx.fillStyle = leftDoor ? '#e53935' : '#444'; ctx.fillRect(100, 190, 30, 30);
         ctx.fillStyle = leftLight ? '#fbc02d' : '#444'; ctx.fillRect(100, 250, 30, 30);
 
         ctx.fillStyle = rightDoor ? '#e53935' : '#444'; ctx.fillRect(1110, 190, 30, 30);
         ctx.fillStyle = rightLight ? '#fbc02d' : '#444'; ctx.fillRect(1110, 250, 30, 30);
 
-        // Mesa do Guarda e Ventilador Animação
+        // Mesa e Ventilador
         ctx.fillStyle = '#181512'; ctx.fillRect(300, 400, 640, 162);
         
-        // Ventilador Girando
         fanAngle += 0.3;
         ctx.save();
         ctx.translate(610, 375);
@@ -274,14 +317,13 @@ function render() {
         ctx.restore();
 
     } else {
-        // --- TELA DAS CÂMERAS ---
+        // CÂMERAS
         ctx.restore();
         ctx.save();
 
         ctx.fillStyle = '#05080c';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Efeito de Ruído/Estática CRT
         for (let i = 0; i < 500; i++) {
             ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.3)';
             ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 3, 3);
@@ -291,21 +333,19 @@ function render() {
         ctx.font = 'bold 20px "Courier New", monospace';
         ctx.fillText(`● CAM ${currentCam}`, 50, 50);
 
-        // Animatrônicos na Câmera Atual
         let detected = [];
         if (animatronics.bonnie.location === currentCam) detected.push("BONNIE");
         if (animatronics.chica.location === currentCam) detected.push("CHICA");
         if (animatronics.freddy.location === currentCam) detected.push("FREDDY");
 
-        // Câmera do Foxy (CAM 1C)
         if (currentCam === '1C') {
             ctx.fillStyle = '#ff0055';
             ctx.fillText(`PIRATE COVE - STAGE: ${animatronics.foxy.stage}`, 50, 85);
             ctx.fillStyle = '#8d6e63';
-            ctx.fillRect(350, 160, 250, 300); // Cortina
+            ctx.fillRect(350, 160, 250, 300);
             if (animatronics.foxy.stage > 0) {
                 ctx.fillStyle = '#d84315';
-                ctx.fillRect(420, 220, 50, 80); // Foxy Espiando
+                ctx.fillRect(420, 220, 50, 80);
             }
         }
 
@@ -313,7 +353,6 @@ function render() {
             ctx.fillStyle = '#ff1744';
             ctx.fillText(`DETECCAO: ${detected.join(', ')}`, 50, 120);
 
-            // Silhueta no Palco
             ctx.fillStyle = '#111';
             ctx.fillRect(400, 180, 200, 280);
             ctx.fillStyle = '#ff1744';
@@ -324,7 +363,6 @@ function render() {
     ctx.restore();
 }
 
-// --- CONSUMO DE ENERGIA E RELÓGIO ---
 function updateGameLogic() {
     if (!gameRunning) return;
 
@@ -366,15 +404,12 @@ function updateGameLogic() {
 }
 
 function gameLoop() {
+    render();
     if (gameRunning) {
         updateGameLogic();
-        render();
     }
     requestAnimationFrame(gameLoop);
 }
 
-function startNight() {
-    document.getElementById('menu-screen').style.display = 'none';
-    gameRunning = true;
-    gameLoop();
-}
+// Inicializa o Loop do Menu
+gameLoop();
