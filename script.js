@@ -1,5 +1,5 @@
 // =============================================================================
-// FIVE NIGHTS AT FREDDY'S — CORREÇÃO DO MENU & FREDDY RENDER
+// FIVE NIGHTS AT FREDDY'S — CORREÇÃO DOS BOTÕES DO MENU
 // =============================================================================
 
 const canvas = document.getElementById('gameCanvas');
@@ -49,7 +49,7 @@ function playSound(type) {
     }
 }
 
-// ESTADOS
+// ESTADOS DO JOGO
 let inMenu = true;
 let gameRunning = false;
 let monitorOpen = false;
@@ -99,20 +99,8 @@ canvas.addEventListener('click', e => {
     }
 });
 
-// VINCULAÇÃO DIRETA DOS BOTÕES DE MENU
-window.addEventListener('DOMContentLoaded', () => {
-    bindMenuEvents();
-});
-
-function bindMenuEvents() {
-    const btnNew = document.getElementById('btn-newgame');
-    const btnCont = document.getElementById('btn-continue');
-
-    if (btnNew) btnNew.onclick = startNight;
-    if (btnCont) btnCont.onclick = startNight;
-}
-
-function startNight() {
+// FUNÇÃO PARA INICIAR A NOITE
+window.startNight = function() {
     initAudio();
     inMenu = false;
     document.getElementById('menu-screen').style.display = 'none';
@@ -120,21 +108,21 @@ function startNight() {
     document.getElementById('night-time').style.display = 'block';
     document.getElementById('camera-flip-btn').style.display = 'flex';
     gameRunning = true;
-}
+};
 
-function toggleMonitor() {
+window.toggleMonitor = function() {
     if (!gameRunning) return;
     monitorOpen = !monitorOpen;
     document.getElementById('cam-map-container').style.display = monitorOpen ? 'block' : 'none';
     playSound('light');
-}
+};
 
-function selectCam(cam) {
+window.selectCam = function(cam) {
     currentCam = cam;
     document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
     document.getElementById(`btn-cam${cam.toLowerCase()}`).classList.add('active');
     playSound('light');
-}
+};
 
 function updateAI() {
     animatronics.bonnie.timer++;
@@ -229,7 +217,7 @@ function triggerJumpscare(who) {
     }, 50);
 }
 
-// RENDERIZAÇÃO DO FREDDY NO MENU PRINCIPAL
+// DESENHO DO FREDDY NO MENU
 function drawMenuFreddy() {
     ctx.save();
     ctx.translate(720, 280);
@@ -241,7 +229,7 @@ function drawMenuFreddy() {
     ctx.beginPath(); ctx.arc(-110, -120, 35, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(110, -120, 35, 0, Math.PI * 2); ctx.fill();
 
-    // Cabeça Principal
+    // Cabeça
     ctx.fillStyle = isTwitch ? '#361f0a' : '#5c3818';
     ctx.beginPath(); ctx.arc(0, 0, 140, 0, Math.PI * 2); ctx.fill();
 
@@ -253,7 +241,7 @@ function drawMenuFreddy() {
     ctx.fillStyle = '#111';
     ctx.beginPath(); ctx.arc(0, 5, 20, 0, Math.PI * 2); ctx.fill();
 
-    // Olhos (Normal vs Flicker)
+    // Olhos
     if (isTwitch) {
         ctx.fillStyle = '#ff0000';
         ctx.fillRect(-50, -45, 20, 20);
@@ -273,7 +261,7 @@ function drawMenuFreddy() {
     ctx.fillRect(-70, -160, 140, 25);
     ctx.fillRect(-45, -230, 90, 70);
 
-    // Gravata Borboleta
+    // Gravata
     ctx.fillStyle = '#111';
     ctx.fillRect(-25, 115, 50, 20);
 
@@ -285,10 +273,9 @@ function render() {
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Desenhar Freddy
         drawMenuFreddy();
 
-        // Estática CRT
+        // Estática
         for (let i = 0; i < 400; i++) {
             ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.4)';
             ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 4, 2);
@@ -451,6 +438,4 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
-// Inicia
-bindMenuEvents();
 gameLoop();
