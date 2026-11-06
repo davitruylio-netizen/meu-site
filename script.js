@@ -1,12 +1,11 @@
 // =============================================================================
-// FIVE NIGHTS AT FREDDY'S — ENGINE COMPLETA E MENU FIEL
+// FIVE NIGHTS AT FREDDY'S — CORREÇÃO DO MENU & FREDDY RENDER
 // =============================================================================
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
-// Contexto de Áudio
 let audioCtx = null;
 
 function initAudio() {
@@ -50,7 +49,7 @@ function playSound(type) {
     }
 }
 
-// ESTADOS DE JOGO
+// ESTADOS
 let inMenu = true;
 let gameRunning = false;
 let monitorOpen = false;
@@ -69,7 +68,6 @@ let power = 100;
 let hour = 0;
 let nightTimer = 0;
 
-// ANIMALTRÔNICOS
 const animatronics = {
     bonnie: { location: '1A', aiLevel: 4, timer: 0 },
     chica:  { location: '1A', aiLevel: 3, timer: 0 },
@@ -77,14 +75,12 @@ const animatronics = {
     freddy: { location: '1A', aiLevel: 2, timer: 0 }
 };
 
-// CONTROLE DE MOUSE
 const wrapper = document.getElementById('game-wrapper');
 wrapper.addEventListener('mousemove', e => {
     const rect = wrapper.getBoundingClientRect();
     mouseX = e.clientX - rect.left;
 });
 
-// CLIQUE DE ESCRITÓRIO
 canvas.addEventListener('click', e => {
     if (inMenu || monitorOpen || !gameRunning) return;
 
@@ -103,9 +99,18 @@ canvas.addEventListener('click', e => {
     }
 });
 
-// EVENTOS DE BOTÃO DE MENU
-document.getElementById('btn-newgame').onclick = startNight;
-document.getElementById('btn-continue').onclick = startNight;
+// VINCULAÇÃO DIRETA DOS BOTÕES DE MENU
+window.addEventListener('DOMContentLoaded', () => {
+    bindMenuEvents();
+});
+
+function bindMenuEvents() {
+    const btnNew = document.getElementById('btn-newgame');
+    const btnCont = document.getElementById('btn-continue');
+
+    if (btnNew) btnNew.onclick = startNight;
+    if (btnCont) btnCont.onclick = startNight;
+}
 
 function startNight() {
     initAudio();
@@ -131,7 +136,6 @@ function selectCam(cam) {
     playSound('light');
 }
 
-// IA
 function updateAI() {
     animatronics.bonnie.timer++;
     if (animatronics.bonnie.timer > 220) {
@@ -225,27 +229,66 @@ function triggerJumpscare(who) {
     }, 50);
 }
 
-// RENDERIZADOR DE MENU E JOGO
+// RENDERIZAÇÃO DO FREDDY NO MENU PRINCIPAL
+function drawMenuFreddy() {
+    ctx.save();
+    ctx.translate(720, 280);
+
+    const isTwitch = Math.random() < 0.08;
+
+    // Orelhas
+    ctx.fillStyle = '#4a2c11';
+    ctx.beginPath(); ctx.arc(-110, -120, 35, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(110, -120, 35, 0, Math.PI * 2); ctx.fill();
+
+    // Cabeça Principal
+    ctx.fillStyle = isTwitch ? '#361f0a' : '#5c3818';
+    ctx.beginPath(); ctx.arc(0, 0, 140, 0, Math.PI * 2); ctx.fill();
+
+    // Focinho
+    ctx.fillStyle = '#8a5a2b';
+    ctx.beginPath(); ctx.ellipse(0, 35, 75, 50, 0, 0, Math.PI * 2); ctx.fill();
+
+    // Nariz
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.arc(0, 5, 20, 0, Math.PI * 2); ctx.fill();
+
+    // Olhos (Normal vs Flicker)
+    if (isTwitch) {
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(-50, -45, 20, 20);
+        ctx.fillRect(30, -45, 20, 20);
+    } else {
+        ctx.fillStyle = '#111';
+        ctx.beginPath(); ctx.arc(-45, -35, 22, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(45, -35, 22, 0, Math.PI * 2); ctx.fill();
+
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(-45, -35, 7, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(45, -35, 7, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Cartola
+    ctx.fillStyle = '#111';
+    ctx.fillRect(-70, -160, 140, 25);
+    ctx.fillRect(-45, -230, 90, 70);
+
+    // Gravata Borboleta
+    ctx.fillStyle = '#111';
+    ctx.fillRect(-25, 115, 50, 20);
+
+    ctx.restore();
+}
+
 function render() {
     if (inMenu) {
-        // --- RENDERIZAÇÃO DO MENU INICIAL ORIGINAL ---
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Desenhar Freddy no Menu com Efeito Flicker
-        const isFlicker = Math.random() < 0.08;
-        ctx.fillStyle = '#5d4037';
-        ctx.beginPath();
-        ctx.arc(720, 300, 190, 0, Math.PI * 2);
-        ctx.fill();
+        // Desenhar Freddy
+        drawMenuFreddy();
 
-        // Olho do Freddy (Flicker)
-        ctx.fillStyle = isFlicker ? '#ff0000' : '#fff';
-        ctx.beginPath();
-        ctx.arc(670, 260, isFlicker ? 14 : 8, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Estática CRT no Menu
+        // Estática CRT
         for (let i = 0; i < 400; i++) {
             ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.4)';
             ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 4, 2);
@@ -288,7 +331,6 @@ function render() {
             ctx.fillStyle = '#030305'; ctx.fillRect(1060, 80, 120, 360);
         }
 
-        // Portas
         ctx.fillStyle = leftDoor ? '#2a2a2a' : '#121212';
         ctx.fillRect(60, leftDoor ? 80 : -280, 120, 360);
         ctx.strokeStyle = '#444'; ctx.strokeRect(60, leftDoor ? 80 : -280, 120, 360);
@@ -297,14 +339,12 @@ function render() {
         ctx.fillRect(1060, rightDoor ? 80 : -280, 120, 360);
         ctx.strokeStyle = '#444'; ctx.strokeRect(1060, rightDoor ? 80 : -280, 120, 360);
 
-        // Botões
         ctx.fillStyle = leftDoor ? '#e53935' : '#444'; ctx.fillRect(100, 190, 30, 30);
         ctx.fillStyle = leftLight ? '#fbc02d' : '#444'; ctx.fillRect(100, 250, 30, 30);
 
         ctx.fillStyle = rightDoor ? '#e53935' : '#444'; ctx.fillRect(1110, 190, 30, 30);
         ctx.fillStyle = rightLight ? '#fbc02d' : '#444'; ctx.fillRect(1110, 250, 30, 30);
 
-        // Mesa e Ventilador
         ctx.fillStyle = '#181512'; ctx.fillRect(300, 400, 640, 162);
         
         fanAngle += 0.3;
@@ -411,5 +451,6 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
-// Inicializa o Loop do Menu
+// Inicia
+bindMenuEvents();
 gameLoop();
